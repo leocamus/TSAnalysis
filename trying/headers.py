@@ -21,3 +21,6 @@ def getNumberOfAttribute(file,name):
 		return [i for i,x in enumerate(perfilesHeaders) if x == name]
 	else:
 		print('Tipo de archivo o nombre de atributo incorrectamente especificado')
+
+def updateHeaders(file):
+	#TODO: Implement this. Read the first line and update the respective list.
