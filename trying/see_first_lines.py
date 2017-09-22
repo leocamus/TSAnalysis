@@ -1,4 +1,4 @@
-from pathlib import Path
+import os
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -12,9 +12,11 @@ import headers
 # para esto. Si es necesario, este script debe crear el directorio output.
 
 # TODO: Ir actualizando las fechas disponibles.
-# TODO: Ir mejorando el sistema de recibimiento de información. 
+# TODO: Ir mejorando el sistema de recibimiento de información por parte del usuario. 
 
-analysisDir = Path(__file__).parents[3]
+levelsUp = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+analysisDir = levelsUp + r'\03_datos'
+SSHDir = analysisDir + r'\01_SSH'
 
 # Tarea 1.0: Que el script reciba, en el modo "interactivo", la fecha que se desea analizar.
 # TODO: Que el script reciba como arg la fecha que se desea analizar.
@@ -55,23 +57,23 @@ attributes = input("Introducir los atributos que deseas que se mantengan en el a
 attributesList = attributes.split(",")
 
 # Verificando si los atributos se encuentran en los archivos respectivos ... 
-if typeChosen == "etapas":
-    etapasHeaders = headers.getHeaders('etapas')
-    if 
+#if typeChosen == "etapas":
+#    etapasHeaders = headers.getHeaders('etapas')
+#    if 
 
 
 
 
-etapasPath = str(analysisDir) + r"\03_datos\2017-03-01.etapas"
-outPath = str(analysisDir) + r"\03_datos\01_histogramDDBB\1_03_2017E.txt"
+#etapasPath = str(analysisDir) + r"\SSH\03_datos\2017-03-01.etapas"
+#outPath = str(analysisDir) + r"\SSH\03_datos\01_histogramDDBB\1_03_2017E.txt"
 
-with open(etapasPath, "r") as etapasFile:
-    outFile = open(outPath,'w') 
-    for line in etapasFile:
-        lineList=line.split("|")
-        if(lineList[4]=="BUS"):
-            outFile.write(lineList[0]+"|"+lineList[8]+"|"+lineList[19]+"|"+lineList[21]+"|"+lineList[27]+"\n")
-    outFile.close()
+#with open(etapasPath, "r") as etapasFile:
+#    outFile = open(outPath,'w') 
+#    for line in etapasFile:
+#        lineList=line.split("|")
+#        if(lineList[4]=="BUS"):
+#            outFile.write(lineList[0]+"|"+lineList[8]+"|"+lineList[19]+"|"+lineList[21]+"|"+lineList[27]+"\n")
+#    outFile.close()
 
 
 
