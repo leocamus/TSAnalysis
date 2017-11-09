@@ -35,16 +35,18 @@ def getHeaders(*args):
 				etapasFile = args[1] + '.etapas'
 				etapasPath = os.path.join(SSHDir, etapasFile)
 				readAndPrintHeader(etapasPath)
-			elif fileType = 'viajes':
+			elif fileType == 'viajes':
 				viajesFile = args[1] + '.viajes'
 				viajesPath = os.path.join(SSHDir, viajesFile)
 				readAndPrintHeader(viajesPath)
-			elif fileType = 'perfiles':
+			elif fileType == 'perfiles':
 				perfilesFile = args[1] + '.perfiles'
 				perfilesPath = os.path.join(SSHDir, perfilesFile) 
 				readAndPrintHeader(perfilesPath)
-		else print ('Fecha incorrectamente especificada')
-	else print('Número de argumentos mal especificado')
+		else: 
+			print('Fecha incorrectamente especificada')
+	else: 
+		print('Número de argumentos mal especificado')
 
 
 def getCurrentSSHDates():
