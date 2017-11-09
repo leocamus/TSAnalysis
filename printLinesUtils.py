@@ -1,10 +1,10 @@
 import os
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
+#import pandas as pd
+#import numpy as np
+#import matplotlib.pyplot as plt
 import headers
 
-# Este será el script principal, que utilizará a los demás módulos/clases(?) en su ejecución. Mi idea
+# Este será el script (módulo) principal, que utilizará a los demás clases en su ejecución. Mi idea
 # es que este script reciba inputs del usuario directamente. Específicamente, el script debe recibir
 # la fecha que se desea analizar en formato dd/mm/aa, el tipo de archivo a analizar (etapa/viaje/perfil)
 # el tipo de vehículo (bus/zp/metro) y los atributos a extraer, con tal de bajar el número de atributos
