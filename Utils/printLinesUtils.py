@@ -3,8 +3,10 @@
 import os
 import zipfile
 import rarfile
-from Utils import TransantiagoConstants
 #import TransantiagoConstants
+
+# For Jupyter.
+from Utils import TransantiagoConstants
 
 fourLevelsUp = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 SSHDir = fourLevelsUp + r'\03_datos\01_SSH'

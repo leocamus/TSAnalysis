@@ -3,8 +3,11 @@
 import os
 import zipfile
 import rarfile
-from Utils import TransantiagoConstants
 #import TransantiagoConstants
+
+#For Jupyter.
+from Utils import TransantiagoConstants
+
 
 fourLevelsUp = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 SSHDir = fourLevelsUp + r'\03_datos\01_SSH'
@@ -89,14 +92,23 @@ def getIndexOfAttribute(fileType,headerName):
 	"""Only referenced to defaultHeaders. TODO: Should be updated when read a new file"""
 	try:
 		if fileType == 'etapas':
-			return [i for i,x in enumerate(defaultEtapasHeaders) if x == headerName]
+			for i,x in enumerate(defaultEtapasHeaders):
+				if x == headerName:
+					return i
 		elif fileType == 'viajes':
-			return [i for i,x in enumerate(defaultViajesHeaders) if x == headerName]
+			for i,x in enumerate(defaultViajesHeaders):
+				if x == headerName:
+					return i
 		elif fileType == 'perfiles':
-			return [i for i,x in enumerate(defaultPerfilesHeaders) if x == headerName]
+			for i,x in enumerate(defaultPerfilesHeaders):
+				if x == headerName:
+					return i
 		elif fileType == 'TRXPPU':
-			return [i for i,x in enumerate(defaultTRXPPUHeaders) if x == headerName]
+			for i,x in enumerate(defaultTRXPPUHeaders):
+				if x == headerName:
+					return i
 		else:
 			raise ValueError('Tipo de archivo o nombre de atributo incorrectamente especificado')
 	except ValueError as err:
 		print(err.args)
+		
