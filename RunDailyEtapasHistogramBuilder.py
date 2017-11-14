@@ -35,7 +35,7 @@ def cleanDataFrame(df):
 	return df
 
 def sortDataFrame(df):
-	sortedDataFrame = df.sort_values(['sitio_subida', 'par_subida' ,'t_subida'], ascending=[True, True, True])
+	sortedDataFrame = df.sort_values(['sitio_subida', 't_subida'], ascending=[True, True])
 	return sortedDataFrame
 
 #def main():
