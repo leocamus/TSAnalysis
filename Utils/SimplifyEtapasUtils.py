@@ -16,7 +16,7 @@ def writeSimplifiedEtapas(date,vehicleType,*argv):
 	try:
 		if date in currentSSHDates:
 			workingEtapaFile = date + '.etapas'
-			simplifiedEtapaFile = date + '_simplifiedEtapas.txt'
+			simplifiedEtapaFile = date + '_simplified.etapas'
 			workingEtapaPath = os.path.join(SSHDir, workingEtapaFile)
 			simplifiedEtapaPath = os.path.join(SSHDir,simplifiedEtapaFile)
 		else:

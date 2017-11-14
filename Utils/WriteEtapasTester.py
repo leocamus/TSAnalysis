@@ -12,7 +12,7 @@ from Utils import TransantiagoConstants
 SSHDir = HeadersUtils.SSHDir
 currentSSHDates = TransantiagoConstants.currentSSHDates
 
-def writeTesterEtapa(fileType,date, numberOfLines):
+def writeSampleOfEtapas(fileType,date, numberOfLines):
 	"""args[0]=fileType, args[1]=date, args[2]=numberOfLines"""
 	try:
 		if fileType == 'etapas' and date in currentSSHDates:
