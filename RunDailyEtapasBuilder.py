@@ -7,7 +7,8 @@ import os
 
 analyzedDate = input('Enter the date to analyze: ')
 analyzedVehicle = input('Enter the vehicle to analyze: ')
-SSHDir = HeadersUtils.SSHDir
+SSHDir = TransantiagoConstants.SSHDir
+busesTorniqueteDir = TransantiagoConstants.busesTorniqueteDir
 currentSSHDates = TransantiagoConstants.currentSSHDates
 
 def runSimplifyEtapas():
@@ -27,6 +28,16 @@ def loadSimplifiedEtapas():
 	etapas_df = pd.read_table(simplifiedEtapasPath, sep='|')
 	return etapas_df
 
+def includeTorniquetesDate(df):
+	torniquetesFile = 'Avance_Consolidado_v2.xlsx'
+	torniquetesDataPath = os.path.join(busesTorniqueteDir, torniquetesFile)
+	busesTorniquete_df = pd.read_excel(torniquetesDataPath)
+	busesTorniquete_df.columns=['sitio_subida','fecha_instalacion']
+	merged_df = pd.merge(df,busesTorniquete_df, on='sitio_subida')
+	checking_missing = pd.isnull(merged_df['fecha_instalacion'])
+	print('Not-matching plates: 'sum(checking_missing)) #should be 0.
+	return merged_df
+
 def cleanDataFrame(df):
 	df = df[df.t_subida != '-']
 	df = df[df.servicio_subida != '-']
@@ -37,9 +48,4 @@ def cleanDataFrame(df):
 def sortDataFrame(df):
 	sortedDataFrame = df.sort_values(['sitio_subida', 't_subida'], ascending=[True, True])
 	return sortedDataFrame
-
-#def main():
-#	etapas_df = loadSimplifiedEtapas() #no args since analyzedDate and analyzedVehicle are fields.
-#	cleanEtapas_df = cleanDataFrame(etapas_df)
-#	sortedEtapas_df = sortDataFrame(cleanEtapas_df)
 

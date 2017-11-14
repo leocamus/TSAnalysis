@@ -8,17 +8,13 @@ import rarfile
 #For Jupyter.
 from Utils import TransantiagoConstants
 
-
-fourLevelsUp = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
-SSHDir = fourLevelsUp + r'\03_datos\01_SSH'
-TRXPPUDir = fourLevelsUp + r'\03_datos\02_TRXPPU'
-
 defaultEtapasHeaders = TransantiagoConstants.defaultEtapasHeaders
 defaultViajesHeaders = TransantiagoConstants.defaultViajesHeaders
 defaultPerfilesHeaders = TransantiagoConstants.defaultPerfilesHeaders
 defaultTRXPPUHeaders = TransantiagoConstants.defaultTRXPPUHeaders
 
 currentSSHDates = TransantiagoConstants.currentSSHDates
+SSHDir = TransantiagoConstants.SSHDir
 
 def getHeaders(*args):
 	"""args[0]=fileType, args[1]=date"""
