@@ -28,14 +28,14 @@ def loadSimplifiedEtapas():
 	etapas_df = pd.read_table(simplifiedEtapasPath, sep='|')
 	return etapas_df
 
-def includeTorniquetesDate(df):
+def mergeTurnstileData(df):
 	torniquetesFile = 'Avance_Consolidado_v2.xlsx'
 	torniquetesDataPath = os.path.join(busesTorniqueteDir, torniquetesFile)
 	busesTorniquete_df = pd.read_excel(torniquetesDataPath)
 	busesTorniquete_df.columns=['sitio_subida','fecha_instalacion']
-	merged_df = pd.merge(df,busesTorniquete_df, on='sitio_subida')
+	merged_df = pd.merge(df,busesTorniquete_df, on='sitio_subida', how='left')
 	checking_missing = pd.isnull(merged_df['fecha_instalacion'])
-	print('Not-matching plates: 'sum(checking_missing)) #should be 0.
+	print('Not found in turnstile database: ' + str(sum(checking_missing)))#Without turnstiles.
 	return merged_df
 
 def cleanDataFrame(df):
@@ -46,6 +46,6 @@ def cleanDataFrame(df):
 	return df
 
 def sortDataFrame(df):
+	df['t_subida']=pd.to_datetime(df.t_subida)
 	sortedDataFrame = df.sort_values(['sitio_subida', 't_subida'], ascending=[True, True])
 	return sortedDataFrame
-
