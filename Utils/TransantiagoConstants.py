@@ -6,7 +6,7 @@ defaultViajesHeaders = ['id','nviaje','netapa','etapas','netapassinbajada','ulti
 defaultPerfilesHeaders = ['ServicioSentido','Patente','Paradero','NombreParada','Hini','Hfin','Cumplimiento','Correlativo','idExpedicion','DistEnRuta','#Subidas','#SubidasLejanas','Subidastotal','SubidasExpandidas','#Bajadas','#BajadasLejanas','Bajadastotal','BajadasExpandidas','Carga','Capacidad','TiempoGPSInterpolado','TiempoPrimeraTrx','TiempoGPSMasCercano','Tiempo','nSubidasTmp','ParaderoUsuario','PeriodoTSExpedicion','PeriodoTSParada','TipoDia','ZP','DeltaTrxs']
 defaultTRXPPUHeaders = ['Unidad','Patente','Servicio','Sentido','SerSen','FechaInicio','Dpinicio','Mhinicio','FechaFin','Dpfin','Lruta','TipoDia','Hitrx','Hftrx','Plazas','TrxValidas','TarjetasNoValidas','Operativo']
 
-currentSSHDates = {'2017-03-01'}
+currentSSHDates = {'2017-03-01','2017-03-05'}
 currentTRXPPUDates = {} #TODO: Sometime it should be filled
 
 fourLevelsUp = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))

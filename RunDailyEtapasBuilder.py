@@ -35,6 +35,7 @@ def loadSimplifiedEtapas():
 	etapas_df = pd.read_table(simplifiedEtapasPath, sep='|', encoding='latin-1')
 	return etapas_df
 
+#TODO: End this sometime
 def mergeIdExpedicion(df):
 	"""Merges the loaded etapas-file with the perfiles-file.idExpedicion into a pandas df and returns it"""
 	try:
@@ -47,9 +48,6 @@ def mergeIdExpedicion(df):
 		print(dateErr)
 
 	perfiles_df = pd.read_table(simplifiedPerfilesPath, sep='|', encoding='latin-1')
-	#TODOTODOTODOTODOTODO
-
-
 	return merged_expedicion_df
 
 def mergeTurnstileData(df):
