@@ -3,6 +3,7 @@
 import os
 import zipfile
 import rarfile
+import gzip
 #import TransantiagoConstants
 
 # For Jupyter.
@@ -21,17 +22,17 @@ def readAndPrintLines(*args):
 			TRXPPUPath = input('Enter the path to the specific file: ')
 			readAndPrintZip(TRXPPUPath,args[1])
 		elif args[0] == 'etapas' and args[2] in currentSSHDates:
-			etapasFile = args[2] + '.etapas'
+			etapasFile = args[2] + '.etapas.gz'
 			etapasPath = os.path.join(SSHDir, etapasFile)
-			readAndPrint(etapasPath,args[1])
+			readAndPrintZip(etapasPath,args[1])
 		elif args[0] == 'viajes' and args[2] in currentSSHDates:
-			viajesFile = args[2] + '.viajes'
+			viajesFile = args[2] + '.viajes.gz'
 			viajesPath = os.path.join(SSHDir, viajesFile)
-			readAndPrint(viajesPath,args[1])
+			readAndPrintZip(viajesPath,args[1])
 		elif args[0] == 'perfiles' and args[2] in currentSSHDates:
-			perfilesFile = args[2] + '.perfiles'
+			perfilesFile = args[2] + '.perfiles.gz'
 			perfilesPath = os.path.join(SSHDir, perfilesFile) 
-			readAndPrint(perfilesPath,args[1])
+			readAndPrintZip(perfilesPath,args[1])
 		else:
 			raise ValueError('fileType is not correctly specified')
 	except ValueError as fileTypeErr:
@@ -47,7 +48,7 @@ def readAndPrintZip(filePath,linesNumber):
 	if filePath[-4:] == '.zip':
 		with zipfile.ZipFile(filePath) as myZipFiles:
 			files = myZipFiles.infolist()
-			with myZipFiles.open(files[0]) as myZipFile:
+			with myZipFiles.open(files[0],'rt') as myZipFile:
 				for x in range(0, int(linesNumber)):
 					print(myZipFile.readline())
 			myZipFile.close()
@@ -55,8 +56,13 @@ def readAndPrintZip(filePath,linesNumber):
 	elif filePath[-4:] == '.rar':
 		with rarfile.RarFile(filePath) as myRarFiles:
 			files = myRarFiles.infolist()
-			with myRarFiles.open(files[0]) as myRarFile:
+			with myRarFiles.open(files[0],'rt') as myRarFile:
 				for x in range(0, int(linesNumber)):
 					print(myRarFile.readline())
 			myRarFile.close()
-		myRarFiles.close()		
+		myRarFiles.close()
+	elif filePath[-3:] == '.gz':
+		with gzip.open(filePath,'rt') as myGzipFile:
+			for x in range(0, int(linesNumber)):
+				print(myGzipFile.readline())
+		myGzipFile.close()

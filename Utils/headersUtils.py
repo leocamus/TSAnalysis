@@ -3,6 +3,7 @@
 import os
 import zipfile
 import rarfile
+import gzip
 #import TransantiagoConstants
 
 #For Jupyter.
@@ -37,17 +38,17 @@ def getHeaders(*args):
 					TRXPPUPath = input('Enter the path to the specific file: ')
 					readAndPrintZipHeader(TRXPPUPath)
 				elif args[0] == 'etapas' and args[1] in currentSSHDates:
-					etapasFile = args[1] + '.etapas'
+					etapasFile = args[1] + '.etapas.gz'
 					etapasPath = os.path.join(SSHDir, etapasFile)
-					readAndPrintHeader(etapasPath)
+					readAndPrintZipHeader(etapasPath)
 				elif args[0] == 'viajes' and args[1] in currentSSHDates:
-					viajesFile = args[1] + '.viajes'
+					viajesFile = args[1] + '.viajes.gz'
 					viajesPath = os.path.join(SSHDir, viajesFile)
-					readAndPrintHeader(viajesPath)
+					readAndPrintZipHeader(viajesPath)
 				elif args[0] == 'perfiles' and args[1] in currentSSHDates:
-					perfilesFile = args[1] + '.perfiles'
+					perfilesFile = args[1] + '.perfiles.gz'
 					perfilesPath = os.path.join(SSHDir, perfilesFile) 
-					readAndPrintHeader(perfilesPath)
+					readAndPrintZipHeader(perfilesPath)
 				else:
 					raise ValueError('Wrong SSH date')
 			except ValueError as dateErr:
@@ -70,7 +71,7 @@ def readAndPrintZipHeader(filePath):
 	if filePath[-4:] == '.zip':	
 		with zipfile.ZipFile(filePath) as myZipFiles:
 			files = myZipFiles.infolist()
-			with myZipFiles.open(files[0]) as myZipFile:
+			with myZipFiles.open(files[0],'rt') as myZipFile:
 				first_line = myZipFile.readline()
 				print(first_line)
 			myZipFile.close()
@@ -78,11 +79,17 @@ def readAndPrintZipHeader(filePath):
 	elif filePath[-4:] == '.rar':
 		with rarfile.RarFile(filePath) as myRarFiles:
 			files = myRarFiles.infolist()
-			with myRarFiles.open(files[0]) as myRarFile:		
+			with myRarFiles.open(files[0],'rt') as myRarFile:		
 				first_line = myRarFile.readline()
 				print(first_line)
 			myRarFile.close()
 		myRarFiles.close()
+	elif filePath[-3:] == '.gz':
+		with gzip.open(filePath,'rt') as myGzipFile:
+			first_line = myGzipFile.readline()
+			print(first_line)
+		myGzipFile.close()
+	
 
 def getIndexOfAttribute(fileType,headerName):
 	"""Only referenced to defaultHeaders. TODO: Should be updated when read a new file"""
@@ -104,7 +111,7 @@ def getIndexOfAttribute(fileType,headerName):
 				if x == headerName:
 					return i
 		else:
-			raise ValueError('Tipo de archivo o nombre de atributo incorrectamente especificado')
+			raise ValueError('Wrong fileType or headerName')
 	except ValueError as err:
 		print(err.args)
 		

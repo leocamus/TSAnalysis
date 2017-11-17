@@ -3,7 +3,7 @@
 #import HeadersUtils
 #import TransantiagoConstants
 import os
-
+import gzip
 #For Jupyter.
 from Utils import HeadersUtils
 from Utils import TransantiagoConstants
@@ -11,11 +11,11 @@ from Utils import TransantiagoConstants
 SSHDir = HeadersUtils.SSHDir
 currentSSHDates = TransantiagoConstants.currentSSHDates
 
-def writesimplifiedPerfiless(date,vehicleType,*argv):
+def writeSimplifiedEtapas(date,vehicleType,*argv):
 	"""args[0]=date, args[1]=vehicleType, args[2,3,...]=headers to extract"""
 	try:
 		if date in currentSSHDates:
-			workingPerfilesFile = date + '.etapas'
+			workingPerfilesFile = date + '.etapas.gz'
 			simplifiedPerfilesFile = date + '_simplified.etapas'
 			workingPerfilesPath = os.path.join(SSHDir, workingPerfilesFile)
 			simplifiedPerfilesPath = os.path.join(SSHDir,simplifiedPerfilesFile)
@@ -24,8 +24,8 @@ def writesimplifiedPerfiless(date,vehicleType,*argv):
 	except ValueError as dateErr:
 		print(dateErr)
 
-	with open(workingPerfilesPath, "r") as workingPerfiles:
-		with open(simplifiedPerfilesPath,"w") as simplifiedPerfiles:
+	with gzip.open(workingPerfilesPath, "rt") as workingPerfiles:
+		with open(simplifiedPerfilesPath,"wt") as simplifiedPerfiles:
 			firstWorkingLine = workingPerfiles.readline().split('|') #Headers
 			simplifiedFirstWorkingLine = simplifyEtapasLine(firstWorkingLine, *argv)
 			simplifiedPerfiles.write("%s\n"%simplifiedFirstWorkingLine)
@@ -41,7 +41,7 @@ def writeSimplifiedPerfiles(date,ZP,*argv):
 	"""args[0]=date, args[1]=ZP, args[2,3,...]=headers to extract"""
 	try:
 		if date in currentSSHDates:
-			workingPerfilesFile = date + '.perfiles'
+			workingPerfilesFile = date + '.perfiles.gz'
 			simplifiedPerfilesFile = date + '_simplified.perfiles'
 			workingPerfilesPath = os.path.join(SSHDir, workingPerfilesFile)
 			simplifiedPerfilesPath = os.path.join(SSHDir,simplifiedPerfilesFile)
@@ -50,8 +50,8 @@ def writeSimplifiedPerfiles(date,ZP,*argv):
 	except ValueError as dateErr:
 		print(dateErr)
 
-	with open(workingPerfilesPath, "r") as workingPerfiles:
-		with open(simplifiedPerfilesPath,"w") as simplifiedPerfiles:
+	with gzip.open(workingPerfilesPath, "rt") as workingPerfiles:
+		with open(simplifiedPerfilesPath,"wt") as simplifiedPerfiles:
 			firstWorkingLine = workingPerfiles.readline().split('|') #Headers
 			simplifiedFirstWorkingLine = simplifyPerfilesLine(firstWorkingLine, *argv)
 			simplifiedPerfiles.write("%s\n"%simplifiedFirstWorkingLine)
