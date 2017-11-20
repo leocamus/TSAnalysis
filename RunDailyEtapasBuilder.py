@@ -48,6 +48,7 @@ def mergeIdExpedicion(df):
 		print(dateErr)
 
 	perfiles_df = pd.read_table(simplifiedPerfilesPath, sep='|', encoding='latin-1')
+	perfiles_df = perfiles_df[perfiles_df[]]
 	return merged_expedicion_df
 
 def mergeTurnstileData(df):
