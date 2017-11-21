@@ -51,23 +51,23 @@ def loadSimplifiedPerfiles():
 	perfiles_df = pd.read_table(simplifiedPerfilesPath, sep='|', encoding='latin-1')
 	return perfiles_df
 
-def mergeIdExpedicion(etapas_df):
-	"""Merges the loaded etapas-file with the perfiles-file.idExpedicion into a pandas df and returns it. Consider printing to a file"""
-	#Begin not-so-ugly coding
-	perfiles_df = loadSimplifiedPerfiles()
-	etapas_df['t_subida'] = pd.to_datetime(etapas_df.t_subida)
-	perfiles_df['Hini'] = pd.to_datetime(perfiles_df.Hini)
-	perfiles_df['Hfin'] = pd.to_datetime(perfiles_df.Hfin)
-	for etapas_index, etapas_row in etapas_df.iterrows():
-		for perfiles_index, perfiles_row in perfiles_df.iterrows():
-			if ((etapas_row['servicio_subida']==perfiles_row['ServicioSentido']) &
-				(etapas_row['sitio_subida']==perfiles_row['Patente']) &
-				(etapas_row['par_subida']==perfiles_row['Paradero']) &
-				(perfiles_row['Hini']<=etapas_row['t_subida']<=perfiles_row['Hfin'])):
-				etapas_row['id_expedicion']=perfiles_row['idExpedicion']
-				break
-	#End not-so-ugly coding
-	return etapas_df
+#def mergeIdExpedicion(etapas_df):
+#	"""Merges the loaded etapas-file with the perfiles-file.idExpedicion into a pandas df and returns it. Consider printing to a file"""
+#	#Begin not-so-ugly coding
+#	perfiles_df = loadSimplifiedPerfiles()
+#	etapas_df['t_subida'] = pd.to_datetime(etapas_df.t_subida)
+#	perfiles_df['Hini'] = pd.to_datetime(perfiles_df.Hini)
+#	perfiles_df['Hfin'] = pd.to_datetime(perfiles_df.Hfin)
+#	for etapas_index, etapas_row in etapas_df.iterrows():
+#		for perfiles_index, perfiles_row in perfiles_df.iterrows():
+#			if ((etapas_row['servicio_subida']==perfiles_row['ServicioSentido']) &
+#				(etapas_row['sitio_subida']==perfiles_row['Patente']) &
+#				(etapas_row['par_subida']==perfiles_row['Paradero']) &
+#				(perfiles_row['Hini']<=etapas_row['t_subida']<=perfiles_row['Hfin'])):
+#				etapas_row['id_expedicion']=perfiles_row['idExpedicion']
+#				break
+#	#End not-so-ugly coding
+#	return etapas_df
 
 def mergeTurnstileData(df):
 	"""Merges the loaded etapas-file with the turnstile-file.fecha_instalacion into a pandas df and returns it"""
@@ -78,6 +78,7 @@ def mergeTurnstileData(df):
 	merged_turnstiles_df = pd.merge(df,busesTorniquete_df, on='sitio_subida', how='left')
 	checking_missing = pd.isnull(merged_turnstiles_df['fecha_instalacion'])
 	print('Not found in turnstile database: ' + str(sum(checking_missing))) #Without turnstiles, then NaT.
+	merged_turnstiles_df['fecha_instalacion'] = pd.to_datetime(merged_turnstiles_df.fecha_instalacion)
 	return merged_turnstiles_df
 
 def cleanDataFrame(df):
