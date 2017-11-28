@@ -25,7 +25,7 @@ class RunSilentlyDailyEtapasBuilderClass:
 		sorted_df = etapas_builder.sortDataFrame(clean_df)
 		processed_sorted_df = etapas_builder.postProcessingSortedDataFrame(sorted_df)
 		[filtered_df,filtered_turnstile_df,filtered_no_turnstile_df] = etapas_builder.filteringDf(processed_sorted_df)
-		return processed_sorted_df, filtered_df, filtered_turnstile_df, filtered_no_turnstile_df
+		return etapas_df, processed_sorted_df, filtered_df, filtered_turnstile_df, filtered_no_turnstile_df
 
 	def runSimplifyEtapas(self):
 		"""Not always necessary. Reducing the complexity of the original etapas-file"""
@@ -120,6 +120,6 @@ class RunSilentlyDailyEtapasBuilderClass:
 
 	def filteringDf(self,df):
 		filtered_df = df[(df.mismo_servicio==True) & (df.mismo_paradero==True) & (df.misma_patente==True)]
-		filtered_turnstile_df = filtered_df[filtered_df.si_2017_torniquete==True]
-		filtered_no_turnstile_df = filtered_df[filtered_df.si_torniquete==False]
+		filtered_turnstile_df = filtered_df[filtered_df.si_2017_torniquete==True] #Only 2017 turnstiles
+		filtered_no_turnstile_df = filtered_df[filtered_df.si_torniquete==False]  #Never-installed turnstiles.
 		return filtered_df, filtered_turnstile_df, filtered_no_turnstile_df
