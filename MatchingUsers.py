@@ -23,24 +23,25 @@ def appendingIdExpedicion(clean_sorted_df):
 		actual_patente = row['sitio_subida']
 		actual_time = row['t_subida']
 
-	if((past_servicio==actual_servicio)&(actual_time - past_time <= pd.Timedelta('15 minutes'))):
-		clean_sorted_df.loc[index,'idExpedicion'] = id_exp
+		if((past_servicio==actual_servicio)&(actual_time - past_time <= pd.Timedelta('15 minutes'))):
+			clean_sorted_df.loc[index,'idExpedicion'] = id_exp
 
-	elif((past_servicio==actual_servicio)&(actual_time - past_time > pd.Timedelta('15 minutes'))):
-		id_exp = id_exp + 1
-		clean_sorted_df.loc[index,'idExpedicion'] = id_exp
+		elif((past_servicio==actual_servicio)&(actual_time - past_time > pd.Timedelta('15 minutes'))):
+			id_exp = id_exp + 1
+			clean_sorted_df.loc[index,'idExpedicion'] = id_exp
 
-	elif((past_servicio!=actual_servicio)):
-		id_exp = 1
-		clean_sorted_df.loc[index,'idExpedicion'] = id_exp
+		elif((past_servicio!=actual_servicio)):
+			id_exp = 1
+			clean_sorted_df.loc[index,'idExpedicion'] = id_exp
 
-	past_servicio = actual_servicio
-	past_patente = actual_patente
-	past_time = actual_time
+		past_servicio = actual_servicio
+		past_patente = actual_patente
+		past_time = actual_time
 
 	return clean_sorted_df
 
 def groupByEtapasDatabase(clean_sorted_df):
+	"""This function is critical"""
 	f = {'t_subida':['min', 'max', 'count'], 'diferencia_tiempo_secs':['mean']}
 	grouped_clean_sorted_df = clean_sorted_df.groupby(['sitio_subida','servicio_subida','idExpedicion','par_subida']).agg(f)
 	grouped_clean_sorted_df = grouped_clean_sorted_df.reset_index()
