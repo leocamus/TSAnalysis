@@ -154,6 +154,9 @@ common_dates = [
 currentTRXPPUDates = {} #TODO: Sometime it should be filled
 
 fourLevelsUp = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
-busesTorniqueteDir = fourLevelsUp + r'\03_datos\03_BUSESTORNIQUETE'
 SSHDir = fourLevelsUp + r'\03_datos\01_SSH'
 TRXPPUDir = fourLevelsUp + r'\03_datos\02_TRXPPU'
+busesTorniqueteDir = fourLevelsUp + r'\03_datos\03_BUSESTORNIQUETE'
+DTPMDir = fourLevelsUp + r'\03_datos\04_DTPM'
+SummaryDir = fourLevelsUp + r'\03_datos\05_SUMMARY'
+RFADir = fourLevelsUp + r'\03_datos\06_RFA'

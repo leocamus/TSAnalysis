@@ -37,6 +37,15 @@ class RunSilentlyDailyEtapasBuilderClass:
 		[filtered_df,filtered_turnstile_df,filtered_no_turnstile_df] = etapas_builder.filteringDf(processed_sorted_df)
 		return filtered_df
 
+	def runProcessedProcess(self):
+		etapas_builder = RunSilentlyDailyEtapasBuilderClass(self.analyzedDate,self.analyzedVehicle,self.if_ZP)
+		etapas_df = etapas_builder.loadSimplifiedEtapas()
+		merged_df = etapas_builder.mergeTurnstileData(etapas_df)
+		clean_df = etapas_builder.cleanDataFrame(merged_df)
+		sorted_df = etapas_builder.sortDataFrame(clean_df)
+		processed_sorted_df = etapas_builder.postProcessingSortedDataFrame(sorted_df)
+		return processed_sorted_df
+
 	def runRawProcess(self):
 		etapas_builder = RunSilentlyDailyEtapasBuilderClass(self.analyzedDate,self.analyzedVehicle,self.if_ZP)
 		etapas_df = etapas_builder.loadSimplifiedEtapas()
