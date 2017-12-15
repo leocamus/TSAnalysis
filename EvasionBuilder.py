@@ -72,7 +72,7 @@ def mergeTransantiagoCodes(complete_evasion):
 	return complete_evasion_w_codes
 
 def processCompleteEvasionDataFrame(complete_evasion_w_codes):
-	"""Processing evasion_with_codes dataframe for consistency with trx databases"""
+	"""Processing evasion_with_codes dataframe for consistency with trx databases."""
 	complete_evasion_w_codes['PATENTE'] =  complete_evasion_w_codes['PATENTE'].str.replace(' ','')
 
 	complete_evasion_w_codes['SERVICIO_TMP'] = complete_evasion_w_codes['SERVICIO'].apply(str)

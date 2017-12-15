@@ -23,20 +23,20 @@ def appendingIdExpedicion(clean_sorted_df):
 		actual_patente = row['sitio_subida']
 		actual_time = row['t_subida']
 
-	if((past_servicio==actual_servicio)&(actual_time - past_time <= pd.Timedelta('15 minutes'))):
-		clean_sorted_df.loc[index,'idExpedicion'] = id_exp
+		if((past_servicio==actual_servicio)&(actual_time - past_time <= pd.Timedelta('15 minutes'))):
+			clean_sorted_df.loc[index,'idExpedicion'] = id_exp
 
-	elif((past_servicio==actual_servicio)&(actual_time - past_time > pd.Timedelta('15 minutes'))):
-		id_exp = id_exp + 1
-		clean_sorted_df.loc[index,'idExpedicion'] = id_exp
+		elif((past_servicio==actual_servicio)&(actual_time - past_time > pd.Timedelta('15 minutes'))):
+			id_exp = id_exp + 1
+			clean_sorted_df.loc[index,'idExpedicion'] = id_exp
 
-	elif((past_servicio!=actual_servicio)):
-		id_exp = 1
-		clean_sorted_df.loc[index,'idExpedicion'] = id_exp
+		elif((past_servicio!=actual_servicio)):
+			id_exp = 1
+			clean_sorted_df.loc[index,'idExpedicion'] = id_exp
 
-	past_servicio = actual_servicio
-	past_patente = actual_patente
-	past_time = actual_time
+		past_servicio = actual_servicio
+		past_patente = actual_patente
+		past_time = actual_time
 
 	return clean_sorted_df
 
