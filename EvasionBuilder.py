@@ -52,59 +52,95 @@ def processSinglesEvasiondAndConcat(first_q, second_q, third_q):
 
 	return complete_evasion
 
-def mergeTransantiagoCodes(complete_evasion):
-	"""Process and merges transantiago codes to evasion ddff"""
-	codes = pd.read_excel(codes_path, encoding = 'latin-1')
-	codes_ida = codes[codes['DIRECTION']=='Ida']
-	codes_ret = codes[codes['DIRECTION']=='Ret']
-	codes_ida = codes_ida.rename(columns = {'USER_CODE':'SERVICIO'})
-	codes_ret = codes_ret.rename(columns = {'USER_CODE':'SERVICIO'})
-	del codes_ida['DIRECTION']
-	del codes_ret['DIRECTION']
+def deleteDuplicatedInCompleteEvasion(complete_evasion):
 
-	complete_evasion_w_codes = pd.merge(complete_evasion,codes_ida, on=['SERVICIO'], how='left')
-	
-	not_founded_services = complete_evasion_w_codes.loc[complete_evasion_w_codes['TS_CODE'].isnull(),'SERVICIO'].unique().tolist()
-	print('The only non-matched user_code services are: ') 
-	print(*not_founded_services, sep='\n') #Should be only D06, so the line below makes sense. Anyway, it is hardcoded so be aware.
-	complete_evasion_w_codes.loc[complete_evasion_w_codes['TS_CODE'].isnull(),'TS_CODE']='446'
-	
-	return complete_evasion_w_codes
-
-def processCompleteEvasionDataFrame(complete_evasion_w_codes):
-	"""Processing evasion_with_codes dataframe for consistency with trx databases."""
-	complete_evasion_w_codes['PATENTE'] =  complete_evasion_w_codes['PATENTE'].str.replace(' ','')
-
-	complete_evasion_w_codes['SERVICIO_TMP'] = complete_evasion_w_codes['SERVICIO'].apply(str)
-	complete_evasion_w_codes['TS_CODE_TMP'] = complete_evasion_w_codes['TS_CODE'].apply(str)
-
-	del complete_evasion_w_codes['SERVICIO']
-	del complete_evasion_w_codes['TS_CODE']
-
-	processed_evasion = complete_evasion_w_codes.rename(columns = {'SERVICIO_TMP':'SERVICIO_USUARIO', 'TS_CODE_TMP':'SERVICIO'})
-
-	return processed_evasion
-
-def deleteDuplicatedInCompleteEvasion(processed_evasion):
-	columns_names = ['FECHA','PATENTE','PUERTAS','N_PUERTA','HORA_INICIO','HORA','MINUTO','TP','TIEMPO','UN','SERVICIO_USUARIO','SERVICIO']
+	print('Original number of rows in complete evasion database is: ' + str(len(complete_evasion.index)))
+	#All columns except for 'INGRESAN' and 'NO_VALIDAN'
+	columns_names = ['FECHA', 'SERVICIO', 'PATENTE', 'PUERTAS', 'N_PUERTA', 'LUGAR_INICIO','HORA_INICIO', 'HORA', 'MINUTO','TP','TIEMPO']
 	
 	#Getting duplicated rows
-	duplicated_evasion = processed_evasion.loc[processed_evasion.duplicated(columns_names, keep=False),:]
+	duplicated_evasion = complete_evasion.loc[complete_evasion.duplicated(columns_names, keep=False),:]
 	print('Number of duplicated rows in complete evasion database is: ' + str(len(duplicated_evasion.index)))
 
-	#Colapsing duplicated rows
+	#Collapsing duplicated rows
 	grouped_duplicated_evasion = duplicated_evasion.groupby(columns_names)['INGRESAN','NO_VALIDAN'].sum()
 	grouped_duplicated_evasion = grouped_duplicated_evasion.reset_index()
 	print('Number of collapsed-duplicated rows in complete evasion database is: ' + str(len(grouped_duplicated_evasion.index)))
 
 	#Deleting duplicated rows in complete evasion database
-	non_duplicated_evasion = processed_evasion.drop_duplicates(columns_names, keep=False)
+	non_duplicated_evasion = complete_evasion.drop_duplicates(columns_names, keep=False)
 	print('Number of rows in complete evasion database without duplicated rows at all is: ' + str(len(non_duplicated_evasion.index)))
 
 	#Appending	
 	frames = [non_duplicated_evasion, grouped_duplicated_evasion]
-	clean_processed_evasion = pd.concat(frames)
-	clean_processed_evasion = clean_processed_evasion.reset_index(drop=True)
-	print('Final number of rows in complete evasion database with collapsed duplicated rows is: ' + str(len(clean_processed_evasion.index)))
+	clean_complete_evasion = pd.concat(frames)
+	clean_complete_evasion = clean_complete_evasion.reset_index(drop=True)
+	print('Final number of rows in complete evasion database with collapsed duplicated rows is: ' + str(len(clean_complete_evasion.index)))
 
-	return clean_processed_evasion
+	return clean_complete_evasion
+
+def mergeTransantiagoCodes(clean_complete_evasion):
+	"""Process and merges transantiago codes to evasion ddff"""
+	codes = pd.read_excel(codes_path, encoding = 'latin-1')
+	
+	codes_ida = codes[codes['DIRECTION']=='Ida']
+	codes_ret = codes[codes['DIRECTION']=='Ret']
+
+	# Both, USER_CODE and TS_CODE should be strings, in both codes_ida and codes_ret.
+	codes_ida.loc[:,'USER_CODE_TMP'] = codes_ida.loc[:,'USER_CODE'].apply(str)
+	codes_ida.loc[:,'TS_CODE_TMP'] = codes_ida.loc[:,'TS_CODE'].apply(str)
+
+	codes_ret.loc[:,'USER_CODE_TMP'] = codes_ret.loc[:,'USER_CODE'].apply(str)
+	codes_ret.loc[:,'TS_CODE_TMP'] = codes_ret.loc[:,'TS_CODE'].apply(str)
+
+	del codes_ida['DIRECTION']
+	del codes_ret['DIRECTION']
+
+	del codes_ida['TS_CODE']
+	del codes_ida['USER_CODE']
+
+	del codes_ret['TS_CODE']
+	del codes_ret['USER_CODE']
+
+	#Cleaning codes from special services. Be aware of this since it might generates errors in the final merging with trx database.
+	clean_codes_ida = codes_ida[(~codes_ida["TS_CODE_TMP"].str.contains('y'))&(~codes_ida["TS_CODE_TMP"].str.contains('Y'))]
+	clean_codes_ret = codes_ida[(~codes_ida["TS_CODE_TMP"].str.contains('y'))&(~codes_ida["TS_CODE_TMP"].str.contains('Y'))]
+
+	clean_codes_ida = clean_codes_ida.rename(columns = {'USER_CODE_TMP':'SERVICIO', 'TS_CODE_TMP':'TS_CODE'})
+	clean_codes_ret = clean_codes_ret.rename(columns = {'USER_CODE_TMP':'SERVICIO', 'TS_CODE_TMP':'TS_CODE'})
+
+	#Changing type of SERVICIO in clean_complete_evasion database
+	clean_complete_evasion.loc[:,'SERVICIO_TMP'] = clean_complete_evasion.loc[:,'SERVICIO'].apply(str)
+	del clean_complete_evasion['SERVICIO']
+	clean_complete_evasion = clean_complete_evasion.rename(columns = {'SERVICIO_TMP' : 'SERVICIO'})
+
+	#Merging...
+	clean_complete_evasion_w_codes = pd.merge(clean_complete_evasion,clean_codes_ida, on=['SERVICIO'], how='left') #Merging with codes_ida is hardcoded, be aware.
+	
+	not_founded_services = clean_complete_evasion_w_codes.loc[clean_complete_evasion_w_codes['TS_CODE'].isnull(),'SERVICIO'].unique().tolist()
+
+	print('The only non-matched user_code services are: ') 
+	print(*not_founded_services, sep='\n') #Should be only D06, so the line below makes sense. Anyway, it is hardcoded so be aware.
+	clean_complete_evasion_w_codes.loc[clean_complete_evasion_w_codes['TS_CODE'].isnull(),'TS_CODE']='446'
+	
+	return clean_complete_evasion_w_codes
+
+def processCompleteEvasionDataFrame(clean_complete_evasion_w_codes):
+	"""Processing evasion_with_codes dataframe for consistency with trx databases."""
+	clean_complete_evasion_w_codes['PATENTE'] =  clean_complete_evasion_w_codes['PATENTE'].str.replace(' ','')
+
+	clean_complete_evasion_w_codes.loc[:,'TIEMPO'] = clean_complete_evasion_w_codes.loc[:,'FECHA'].dt.strftime('%Y-%m-%d') + ' ' + clean_complete_evasion_w_codes.loc[:,'TIEMPO']
+	clean_complete_evasion_w_codes['TIEMPO'] = pd.to_datetime(clean_complete_evasion_w_codes['TIEMPO'])
+
+	processed_evasion = clean_complete_evasion_w_codes.rename(columns = {'SERVICIO':'SERVICIO_USUARIO', 'TS_CODE':'SERVICIO'})
+
+	return processed_evasion
+
+def runCompleteProcess():
+	[first_q, second_q, third_q] = loadSinglesEvasion()
+	complete_evasion = processSinglesEvasiondAndConcat(first_q,second_q,third_q)
+	clean_complete_evasion = deleteDuplicatedInCompleteEvasion(complete_evasion)
+	clean_complete_evasion_w_codes = mergeTransantiagoCodes(clean_complete_evasion)
+	processed_evasion = processCompleteEvasionDataFrame(clean_complete_evasion_w_codes)
+
+	return processed_evasion

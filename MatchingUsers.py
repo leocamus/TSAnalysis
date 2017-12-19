@@ -1,6 +1,6 @@
 import pandas as pd
 
-def simplifyingEvasionAndEtapas(common_dates_evasion, date):
+def simplifyingEvasion(common_dates_evasion, date):
 	#First filtering by date.
 	evasion_by_date = common_dates_evasion[common_dates_evasion['FECHA']==pd.to_datetime(date)]
 	#Then getting the info.
