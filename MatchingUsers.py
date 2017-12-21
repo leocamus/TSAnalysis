@@ -1,4 +1,5 @@
 import pandas as pd
+from Utils import TransantiagoConstants
 
 def simplifyingEvasion(common_dates_evasion, date):
 	#First filtering by date.
@@ -44,8 +45,17 @@ def groupByEtapasDatabase(clean_sorted_df):
 	f = {'t_subida':['min', 'max', 'count'], 'diferencia_tiempo_secs':['mean']}
 	grouped_clean_sorted_df = clean_sorted_df.groupby(['sitio_subida','servicio_subida','idExpedicion','par_subida']).agg(f)
 	grouped_clean_sorted_df = grouped_clean_sorted_df.reset_index()
-	grouped_clean_sorted_df.columns = [''.join(col).strip() for col in grouped_clean_sorted_df.columns.values]
-	grouped_clean_sorted_df = grouped_clean_sorted_df.sort_values(by=['sitio_subida', 'servicio_subida', 'idExpedicion', 't_subidamin'], ascending=[True, True, True, True])
+
+	columns = []
+	for col in grouped_clean_sorted_df.columns.values:
+		if col[1]!='':
+			col = '_'.join(col).strip()
+		else:
+			col = ''.join(col).strip()
+		columns.append(col)
+
+	grouped_clean_sorted_df.columns = columns
+	grouped_clean_sorted_df = grouped_clean_sorted_df.sort_values(by=['sitio_subida', 'servicio_subida', 'idExpedicion', 't_subida_min'], ascending=[True, True, True, True])
 	grouped_clean_sorted_df = grouped_clean_sorted_df.reset_index(drop=True)
 
 	return grouped_clean_sorted_df
@@ -66,8 +76,8 @@ def appendingStartEndCuts(grouped_clean_sorted_df):
 
 		actual_plate = row['sitio_subida']
 		actual_service = row['servicio_subida']
-		actual_initial_hour = row['t_subidamin']
-		actual_end_hour = row['t_subidamax']
+		actual_initial_hour = row['t_subida_min']
+		actual_end_hour = row['t_subida_max']
 
 		actual_id_expedicion = row['idExpedicion']
 
@@ -81,8 +91,8 @@ def appendingStartEndCuts(grouped_clean_sorted_df):
 		else:        
 			future_plate = grouped_clean_sorted_df.loc[future_index,'sitio_subida']
 			future_service = grouped_clean_sorted_df.loc[future_index,'servicio_subida']
-			future_initial_hour = grouped_clean_sorted_df.loc[future_index,'t_subidamin']
-			future_end_hour = grouped_clean_sorted_df.loc[future_index,'t_subidamax']
+			future_initial_hour = grouped_clean_sorted_df.loc[future_index,'t_subida_min']
+			future_end_hour = grouped_clean_sorted_df.loc[future_index,'t_subida_max']
 			future_id_expedicion = grouped_clean_sorted_df.loc[future_index,'idExpedicion']
 			if ((actual_plate!=future_plate)|(actual_service!=future_service)|(actual_id_expedicion!=future_id_expedicion)): #Changing service or plate... assuming a pre-defined value, i.e., 30 seconds
 				end_cut = actual_end_hour + (pd.Timedelta('30 seconds'))
@@ -111,9 +121,9 @@ def slicingEvasionDatabase(grouped_clean_sorted_df, evasion_by_date):
 		actual_util_df = actual_util_df[(actual_util_df['INGRESAN'] > actual_util_df['NO_VALIDAN'])] #Be aware of this condition
 		actual_ev_obs = len(actual_util_df.index)
 
-		grouped_clean_sorted_df.loc[index,'count_ev_obs'] = actual_ev_obs
-		grouped_clean_sorted_df.loc[index,'ingresan'] = actual_util_df['INGRESAN'].sum()
-		grouped_clean_sorted_df.loc[index,'no_validan'] = actual_util_df['NO_VALIDAN'].sum()
+		grouped_clean_sorted_df.loc[index,'EVASION_COUNT'] = actual_ev_obs
+		grouped_clean_sorted_df.loc[index,'TOTAL_INGRESAN'] = actual_util_df['INGRESAN'].sum()
+		grouped_clean_sorted_df.loc[index,'TOTAL_NO_VALIDAN'] = actual_util_df['NO_VALIDAN'].sum()
 
 	return grouped_clean_sorted_df
 
