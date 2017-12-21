@@ -116,3 +116,15 @@ def slicingEvasionDatabase(grouped_clean_sorted_df, evasion_by_date):
 		grouped_clean_sorted_df.loc[index,'no_validan'] = actual_util_df['NO_VALIDAN'].sum()
 
 	return grouped_clean_sorted_df
+
+def reMergeTurnstileData(grouped_clean_sorted_df):
+	torniquetesDataPath = TransantiagoConstants.busesTorniqueteDir + '/Avance_Consolidado_v2.xlsx'
+	busesTorniquete_df = pd.read_excel(torniquetesDataPath)
+	busesTorniquete_df.columns=['sitio_subida','fecha_instalacion']
+	busesTorniquete_df['sitio_subida'] = busesTorniquete_df['sitio_subida'].str.replace("-", "")
+	busesTorniquete_df['sitio_subida'] = busesTorniquete_df['sitio_subida'].str.replace(" ", "")
+	merged_grouped_clean_sorted_df = pd.merge(grouped_clean_sorted_df,busesTorniquete_df, on='sitio_subida', how='left')
+	merged_grouped_clean_sorted_df.loc[:,'SI_TORNIQUETE'] = (merged_grouped_clean_sorted_df.loc[:,'fecha_instalacion'].notnull())
+	merged_grouped_clean_sorted_df.loc[:,'SI_2017_TORNIQUETE'] = (merged_grouped_clean_sorted_df.loc[:,'fecha_instalacion']>pd.to_datetime('2017-01-01'))
+
+	return merged_grouped_clean_sorted_df
