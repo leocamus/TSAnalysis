@@ -12,7 +12,7 @@ def simplifyingEvasion(common_dates_evasion, date):
 	#Then returning
 	return evasion_by_date, patentes_by_date, servicios_by_date
 
-def appendingIdExpedicion(clean_sorted_df):
+def appendingIdExpedicion(clean_sorted_df, time_delta):
 	past_servicio = ''
 	past_patente = ''
 	past_time = pd.to_datetime('')
@@ -24,13 +24,11 @@ def appendingIdExpedicion(clean_sorted_df):
 		actual_patente = row['sitio_subida']
 		actual_time = row['t_subida']
 
-		if((past_servicio==actual_servicio)&(actual_time - past_time <= pd.Timedelta('15 minutes'))):
+		if((past_servicio==actual_servicio)&(actual_time - past_time <= pd.Timedelta(time_delta))):
 			clean_sorted_df.loc[index,'idExpedicion'] = id_exp
-
-		elif((past_servicio==actual_servicio)&(actual_time - past_time > pd.Timedelta('15 minutes'))):
+		elif((past_servicio==actual_servicio)&(actual_time - past_time > pd.Timedelta(time_delta))):
 			id_exp = id_exp + 1
 			clean_sorted_df.loc[index,'idExpedicion'] = id_exp
-
 		elif((past_servicio!=actual_servicio)):
 			id_exp = 1
 			clean_sorted_df.loc[index,'idExpedicion'] = id_exp

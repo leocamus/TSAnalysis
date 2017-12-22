@@ -21,7 +21,7 @@ def runSimplifyEtapas():
 
 def runSimplifyPerfiles():
 	"""Not always necessary. Reducing the complexity of the original etapas-file"""
-	SimplifyFilesUtils.writeSimplifiedPerfiles(analyzedDate,if_ZP,'ServicioSentido','Patente','Paradero','Hini','Hfin','idExpedicion','DistEnRuta')
+	SimplifyFilesUtils.writeSimplifiedPerfiles(analyzedDate,if_ZP,'ServicioSentido','Patente','Hini','Hfin','idExpedicion')
 
 def loadSimplifiedEtapas():
 	"""Returns the simplified etapas-file as pandas df"""
