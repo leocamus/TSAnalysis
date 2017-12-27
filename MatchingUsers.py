@@ -1,5 +1,7 @@
 import pandas as pd
 from Utils import TransantiagoConstants
+#TODO: All functions iterating through datasets should be aware of reset indexing. Thus,
+# reset_index(drop=True) should be called in every function.
 
 def simplifyingEvasion(common_dates_evasion, date):
 	#First filtering by date.
@@ -57,6 +59,39 @@ def groupByEtapasDatabase(clean_sorted_df):
 	grouped_clean_sorted_df = grouped_clean_sorted_df.reset_index(drop=True)
 
 	return grouped_clean_sorted_df
+
+def identifyingGroups(grouped_clean_sorted_df):
+	past_patente=''
+	past_servicio=''
+	past_paradero=''
+	past_expedicion = 0
+	grouped_clean_sorted_df['group_b_flag']=''
+
+	for index, row in grouped_clean_sorted_df.iterrows():
+		actual_patente = row['sitio_subida']
+		actual_servicio = row['servicio_subida']
+		actual_paradero = row['par_subida']
+		actual_expedicion = row['idExpedicion']
+
+		if((past_patente==actual_patente)&(past_servicio==actual_servicio)&(past_paradero==actual_paradero)&(past_expedicion + 1 == actual_expedicion)):
+			grouped_clean_sorted_df.loc[index,'group_b_flag'] = 1
+		else:
+			grouped_clean_sorted_df.loc[index,'group_b_flag'] = 0
+
+		past_patente = actual_patente
+		past_servicio = actual_servicio
+		past_paradero = actual_paradero
+		past_expedicion = actual_expedicion
+
+	return grouped_clean_sorted_df
+
+def dropGroupBRows(grouped_clean_sorted_df, ind):
+	if ind==True:
+		group_A_clean_sorted_df = grouped_clean_sorted_df[grouped_clean_sorted_df['group_b_flag']==0]
+		group_A_clean_sorted_df = group_A_clean_sorted_df.reset_index(drop=True)
+		return group_A_clean_sorted_df
+	else:			
+		return grouped_clean_sorted_df
 
 def appendingStartEndCuts(grouped_clean_sorted_df):
 	past_plate = ''
