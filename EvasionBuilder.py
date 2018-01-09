@@ -80,7 +80,7 @@ def deleteDuplicatedInCompleteEvasion(complete_evasion):
 	return clean_complete_evasion
 
 def mergeTransantiagoCodes(clean_complete_evasion):
-	"""Process and merges transantiago codes to evasion ddff"""
+	"""Process and merges transantiago codes to evasion ddff. TODO: Please consider to review this."""
 	codes = pd.read_excel(codes_path, encoding = 'latin-1')
 	
 	codes_ida = codes[codes['DIRECTION']=='Ida']
@@ -119,7 +119,7 @@ def mergeTransantiagoCodes(clean_complete_evasion):
 	
 	not_founded_services = clean_complete_evasion_w_codes.loc[clean_complete_evasion_w_codes['TS_CODE'].isnull(),'SERVICIO'].unique().tolist()
 
-	print('The only non-matched user_code services are: ') 
+	print('The only non-matched user_code services are: ')
 	print(*not_founded_services, sep='\n') #Should be only D06, so the line below makes sense. Anyway, it is hardcoded so be aware.
 	clean_complete_evasion_w_codes.loc[clean_complete_evasion_w_codes['TS_CODE'].isnull(),'TS_CODE']='446'
 	
