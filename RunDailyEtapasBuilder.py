@@ -13,7 +13,7 @@ if_ZP = input('Consider ZP in perfiles file (0/1)?: ')
 
 SSHDir = TransantiagoConstants.SSHDir
 busesTorniqueteDir = TransantiagoConstants.busesTorniqueteDir
-currentSSHDates = TransantiagoConstants.currentSSHDates
+currentSSHDates = TransantiagoConstants.updateCurrentSSHDates()
 
 def runSimplifyEtapas():
 	"""Not always necessary. Reducing the complexity of the original etapas-file"""
