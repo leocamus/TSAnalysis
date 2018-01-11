@@ -43,7 +43,7 @@ class TemporalDescriptivesBuilderClass:
 
 		self.df['t_subida']=pd.to_datetime(self.df.t_subida)
 		self.df = self.df.sort_values(by=['sitio_subida', 't_subida'], ascending=[True, True])
-		self.df = self.df.reset_index()
+		self.df = self.df.reset_index(drop=True)
 
 		torniquetesFile = 'Avance_Consolidado_v2.xlsx'
 		torniquetesDataPath = os.path.join(busesTorniqueteDir, torniquetesFile)
