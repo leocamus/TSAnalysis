@@ -16,7 +16,9 @@ class TemporalDescriptivesBuilderClass:
 	def __init__(self,date):
 		self.analyzedDate = date
 		self.df = pd.DataFrame()
+		self.grouped_data = pd.DataFrame()
 		self.periods = pd.DataFrame()
+		self.codes = pd.DataFrame()
 
 	def loadEtapas(self):
 		"""Returns the simplified etapas-file as pandas df"""
@@ -34,8 +36,16 @@ class TemporalDescriptivesBuilderClass:
 		periods_path = os.path.join(DTPMDir,'periodos_ts.xlsx')
 		self.periods = pd.read_excel(periods_path, encoding = 'latin-1')
 
+	def loadCodes(self):
+		codes_path = os.path.join(DTPMDir, 'codes_services.xlsx')
+		self.codes = pd.read_excel(codes_path, encoding = 'latin-1')
+
 	def cleanAndProcessEtapas(self):
-		"""Returns a clean pandas dataframe without '-' values and pre-processed"""	
+		"""Returns a clean pandas dataframe without '-' values and pre-processed"""
+		TemporalDescriptivesBuilderClass.loadEtapas(self)
+		TemporalDescriptivesBuilderClass.loadPeriods(self)
+		TemporalDescriptivesBuilderClass.loadCodes(self)
+
 		self.df = self.df[self.df.t_subida != '-']
 		self.df = self.df[self.df.servicio_subida != '-']
 		self.df = self.df[self.df.par_subida != '-']
@@ -97,4 +107,36 @@ class TemporalDescriptivesBuilderClass:
 			self.df['PERIODO'] =  self.df[n[0]] + self.df[n[1]] + self.df[n[2]] + self.df[n[3]] + self.df[n[4]] + self.df[n[5]] + self.df[n[6]] + self.df[n[7]]
 			self.df = self.df.drop([n[0],n[1],n[2],n[3],n[4],n[5],n[6],n[7]],axis=1)
 
+	def groupData(self):
+		f = {'id':['count'], 'si_torniquete':['unique'], 'si_2017_torniquete':['unique']}
+		self.grouped_data = self.df.groupby( [ 'PERIODO', 'sitio_subida', 'servicio_subida'] ).agg(f)
+		columns = []
+		for col in self.grouped_data.columns.values:
+			if col[1]!='':
+				col = '_'.join(col).strip()
+			else:
+				col = ''.join(col).strip()
 
+			columns.append(col)
+
+		self.grouped_data.columns = columns
+		self.grouped_data = self.grouped_data.reset_index()
+
+	def appendUnidadNegocio(self):
+		self.grouped_data['simplified_servicio'] = ''
+		self.grouped_data.loc[:,'simplified_servicio'] = self.grouped_data.loc[:,'servicio_subida'].str.replace('T','')
+		self.grouped_data.loc[:,'simplified_servicio'] = self.grouped_data.loc[:,'simplified_servicio'].str.replace('00','')
+		self.grouped_data.loc[:,'TS_CODE'] = self.grouped_data.loc[:,'simplified_servicio'].str.split(' ').str[0]
+		self.grouped_data.loc[:,'DIRECTION'] = self.grouped_data.loc[:,'simplified_servicio'].str[-1:]
+		self.grouped_data.loc[:,'DIRECTION'] = self.grouped_data.loc[:,'DIRECTION'].str.replace('R','Ret')
+		self.grouped_data.loc[:,'DIRECTION'] = self.grouped_data.loc[:,'DIRECTION'].str.replace('I','Ida')
+		self.grouped_data = pd.merge(self.grouped_data,self.codes, on=['TS_CODE','DIRECTION'], how='left')
+		self.grouped_data = self.grouped_data.drop(['simplified_servicio'],axis=1)
+		#Verifying null values.
+		self.grouped_data.loc[(self.grouped_data['UN'].isnull()) & (self.grouped_data['TS_CODE'].str[:1]=='1'),'UN'] = 1
+		self.grouped_data.loc[(self.grouped_data['UN'].isnull()) & (self.grouped_data['TS_CODE'].str[:1]=='2'),'UN'] = 2
+		self.grouped_data.loc[(self.grouped_data['UN'].isnull()) & (self.grouped_data['TS_CODE'].str[:1]=='3'),'UN'] = 3
+		self.grouped_data.loc[(self.grouped_data['UN'].isnull()) & (self.grouped_data['TS_CODE'].str[:1]=='4'),'UN'] = 4
+		self.grouped_data.loc[(self.grouped_data['UN'].isnull()) & (self.grouped_data['TS_CODE'].str[:1]=='5'),'UN'] = 5
+		self.grouped_data.loc[(self.grouped_data['UN'].isnull()) & (self.grouped_data['TS_CODE'].str[:1]=='B'),'UN'] = 6
+		self.grouped_data.loc[(self.grouped_data['UN'].isnull()) & (self.grouped_data['TS_CODE'].str[:1]=='F'),'UN'] = 7
