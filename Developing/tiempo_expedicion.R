@@ -1,8 +1,6 @@
 
-
 #Setting working space
 setwd("/Users/diego/Desktop/Evasion/01_analisis/03_datos/01_SSH")
-
 
 ##Function to load libraries and install packages, if necessary
 getLibraries <- function(libs) {
@@ -13,29 +11,64 @@ getLibraries <- function(libs) {
   }
 }
 
-libs <- c("data.table")
+libs <- c("data.table",
+          "plyr",
+          "lubridate",
+          "chron")
 
 getLibraries(libs)
 
-#etapas <- read.csv("2017-03-13.etapas", sep = "|", header = TRUE, nrows = 1000000)
-#viajes <- read.csv("2017-03-13.viajes", sep = "|", header = TRUE, nrows = 1000000)
+#Getting files names in the directory
+file_name <- list.files()
 
-#Loading input files
-perfiles <- read.csv("2017-03-13.perfiles", sep = "|", header = TRUE, nrows = 1000001)
 
-#Splitting the data frame into several data frames based on idExpedicion
-perfiles$idExpedicion <- factor(perfiles$idExpedicion, levels = unique(perfiles$idExpedicion))
+for (i in file_name) {
+  #reading files
+  perfiles <- read.csv(gzfile(i), sep = "|", header = TRUE)
+  
+  #Collapsing the table by idExpedition
+  dframe <- data.table(perfiles)
+  dframe <- dframe[, list(Subidastotal = sum(Subidastotal),
+                          Bajadastotal = sum(Bajadastotal),
+                          SubidasExpandidas = sum(SubidasExpandidas),
+                          BajadasExpandidas = sum(BajadasExpandidas)), by= list(ServicioSentido,
+                                                                                Patente,
+                                                                                PeriodoTSExpedicion,
+                                                                                idExpedicion,
+                                                                                Hini,
+                                                                                Hfin)]
+  
+  #Adding time and date variables
+  dframe$Date <- as.Date(dframe$Hini)
+  dframe$ti <- format(as.POSIXct(dframe$Hini) ,format = "%H:%M:%S")
+  dframe$tf <- format(as.POSIXct(dframe$Hfin) ,format = "%H:%M:%S")
 
-#Sample
-expedicion_sample <- subset(perfiles, perfiles$idExpedicion == 0 | perfiles$idExpedicion == 1)
+  
+  #Adding expedition time
+  dframe$texpedicion <- period_to_seconds(hms(dframe$tf) - hms(dframe$ti))/60
 
-dframe <- data.table(expedicion_sample, key = "idExpedicion")
+  #Expedition time analysis
+  #Adding expedition time to negative values
+  dframe_neg <- dframe[which(dframe$texpedicion < 0),]
+  
+  dframe_neg$ti_0 <- hms("23:59:59") - hms(dframe_neg$ti)
+  dframe_neg$tf_1 <- hms(dframe_neg$tf) - hms("00:00:00")
+  dframe_neg$texp_corr <- dframe_neg$ti_0 + dframe_neg$tf_1
+  
+  dframe$texpedicion[which(dframe$texpedicion < 0)] <- period_to_seconds(dframe_neg$texp_corr)/60
+                                                                                                                          
+  #Boxplot
+  boxplot_texp <- boxplot.stats(dframe$texpedicion, coef = 3)
+  
+  #Saving table
+  
 
-dframe <- dframe[, list(ServicioSentido = unique(ServicioSentido),
-                        Subidastotal = sum(Subidastotal),
-                        Bajadastotal = sum(Bajadastotal),
-                        Patente = unique(Patente),
-                        Hini = unique(Hini),
-                        Hfin = unique(Hfin),
-                        SubidasExpandidas = sum(SubidasExpandidas),
-                        BajadasExpandidas = sum(BajadasExpandidas)), by= idExpedicion]
+  
+}
+
+
+
+
+
+
+
