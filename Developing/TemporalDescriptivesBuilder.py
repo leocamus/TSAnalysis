@@ -130,6 +130,9 @@ class TemporalDescriptivesBuilderClass:
 		self.grouped_data.loc[:,'DIRECTION'] = self.grouped_data.loc[:,'simplified_servicio'].str[-1:]
 		self.grouped_data.loc[:,'DIRECTION'] = self.grouped_data.loc[:,'DIRECTION'].str.replace('R','Ret')
 		self.grouped_data.loc[:,'DIRECTION'] = self.grouped_data.loc[:,'DIRECTION'].str.replace('I','Ida')
+		#Before merging, codes['TS_CODE'] should be string type.
+		self.codes['TS_CODE'] = self.codes['TS_CODE'].astype(str)
+		#Mergin...
 		self.grouped_data = pd.merge(self.grouped_data,self.codes, on=['TS_CODE','DIRECTION'], how='left')
 		self.grouped_data = self.grouped_data.drop(['simplified_servicio'],axis=1)
 		#Verifying null values.

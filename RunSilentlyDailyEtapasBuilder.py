@@ -65,7 +65,8 @@ class RunSilentlyDailyEtapasBuilderClass:
 
 	def runSimplifyEtapas(self):
 		"""Not always necessary. Reducing the complexity of the original etapas-file"""
-		SimplifyFilesUtils.writeSimplifiedEtapas(self.analyzedDate,self.analyzedVehicle,'id','nviaje','tipo_transporte','t_subida','media_hora_subida','servicio_subida','par_subida','sitio_subida')
+		SimplifyFilesUtils.writeSimplifiedEtapas(self.analyzedDate,self.analyzedVehicle,'id','nviaje','tipo_transporte','t_subida','servicio_subida','par_subida','sitio_subida')
+#		SimplifyFilesUtils.writeSimplifiedEtapas(self.analyzedDate,self.analyzedVehicle,'id','nviaje','tipo_transporte','t_subida','media_hora_subida','servicio_subida','par_subida','sitio_subida')
 
 	def runSimplifyPerfiles(self):
 		"""Not always necessary. Reducing the complexity of the original etapas-file"""
