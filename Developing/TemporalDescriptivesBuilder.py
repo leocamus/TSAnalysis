@@ -1,3 +1,4 @@
+"""Module to run the complete methodology for building descriptives per day"""
 from Utils import SimplifyFilesUtils
 from Utils import HeadersUtils
 from Utils import TransantiagoConstants
@@ -6,12 +7,12 @@ import numpy as np
 import os
 import datetime as dt
 
-SSHDir = TransantiagoConstants.SSHDir
-busesTorniqueteDir = TransantiagoConstants.busesTorniqueteDir
-DTPMDir = TransantiagoConstants.DTPMDir
-currentSSHDates = TransantiagoConstants.updateCurrentSSHDates()
-
 class TemporalDescriptivesBuilderClass:
+
+	SSHDir = TransantiagoConstants.SSHDir
+	busesTorniqueteDir = TransantiagoConstants.busesTorniqueteDir
+	DTPMDir = TransantiagoConstants.DTPMDir
+	currentSSHDates = TransantiagoConstants.updateCurrentSSHDates()
 
 	def __init__(self,date):
 		self.analyzedDate = date
@@ -23,9 +24,9 @@ class TemporalDescriptivesBuilderClass:
 	def loadEtapas(self):
 		"""Returns the simplified etapas-file as pandas df"""
 		try:
-			if self.analyzedDate in currentSSHDates:
+			if self.analyzedDate in TemporalDescriptivesBuilderClass.currentSSHDates:
 				simplifiedEtapasFile = self.analyzedDate + '_simplified.etapas'
-				simplifiedEtapasPath = os.path.join(SSHDir, simplifiedEtapasFile)	
+				simplifiedEtapasPath = os.path.join(TemporalDescriptivesBuilderClass.SSHDir, simplifiedEtapasFile)	
 			else:
 				raise ValueError('date is not correctly specified')
 		except ValueError as dateErr:
@@ -33,15 +34,15 @@ class TemporalDescriptivesBuilderClass:
 		self.df = pd.read_table(simplifiedEtapasPath, sep='|', encoding='latin-1')
 
 	def loadPeriods(self):
-		periods_path = os.path.join(DTPMDir,'periodos_ts.xlsx')
+		periods_path = os.path.join(TemporalDescriptivesBuilderClass.DTPMDir,'periodos_ts.xlsx')
 		self.periods = pd.read_excel(periods_path, encoding = 'latin-1')
 
 	def loadCodes(self):
-		codes_path = os.path.join(DTPMDir, 'codes_services.xlsx')
+		codes_path = os.path.join(TemporalDescriptivesBuilderClass.DTPMDir, 'codes_services.xlsx')
 		self.codes = pd.read_excel(codes_path, encoding = 'latin-1')
 
 	def cleanAndProcessEtapas(self):
-		"""Returns a clean pandas dataframe without '-' values and pre-processed"""
+		"""Returns a clean pandas dataframe without '-' values and pre-processed for next operations"""
 		TemporalDescriptivesBuilderClass.loadEtapas(self)
 		TemporalDescriptivesBuilderClass.loadPeriods(self)
 		TemporalDescriptivesBuilderClass.loadCodes(self)
@@ -56,7 +57,7 @@ class TemporalDescriptivesBuilderClass:
 		self.df = self.df.reset_index(drop=True)
 
 		torniquetesFile = 'Avance_Consolidado_v2.xlsx'
-		torniquetesDataPath = os.path.join(busesTorniqueteDir, torniquetesFile)
+		torniquetesDataPath = os.path.join(TemporalDescriptivesBuilderClass.busesTorniqueteDir, torniquetesFile)
 		busesTorniquete_df = pd.read_excel(torniquetesDataPath)
 		busesTorniquete_df.columns=['sitio_subida','fecha_instalacion']
 		self.df = pd.merge(self.df,busesTorniquete_df, on='sitio_subida', how='left')
@@ -136,10 +137,10 @@ class TemporalDescriptivesBuilderClass:
 		self.grouped_data = pd.merge(self.grouped_data,self.codes, on=['TS_CODE','DIRECTION'], how='left')
 		self.grouped_data = self.grouped_data.drop(['simplified_servicio'],axis=1)
 		#Verifying null values.
-		self.grouped_data.loc[(self.grouped_data['UN'].isnull()) & (self.grouped_data['TS_CODE'].str[:1]=='1'),'UN'] = 1
-		self.grouped_data.loc[(self.grouped_data['UN'].isnull()) & (self.grouped_data['TS_CODE'].str[:1]=='2'),'UN'] = 2
-		self.grouped_data.loc[(self.grouped_data['UN'].isnull()) & (self.grouped_data['TS_CODE'].str[:1]=='3'),'UN'] = 3
-		self.grouped_data.loc[(self.grouped_data['UN'].isnull()) & (self.grouped_data['TS_CODE'].str[:1]=='4'),'UN'] = 4
-		self.grouped_data.loc[(self.grouped_data['UN'].isnull()) & (self.grouped_data['TS_CODE'].str[:1]=='5'),'UN'] = 5
-		self.grouped_data.loc[(self.grouped_data['UN'].isnull()) & (self.grouped_data['TS_CODE'].str[:1]=='B'),'UN'] = 6
-		self.grouped_data.loc[(self.grouped_data['UN'].isnull()) & (self.grouped_data['TS_CODE'].str[:1]=='F'),'UN'] = 7
+		self.grouped_data.loc[(self.grouped_data['UN'].isnull()) & (self.grouped_data['TS_CODE'].str[:1]=='1'),'UN'] = 1 #OK.
+		self.grouped_data.loc[(self.grouped_data['UN'].isnull()) & (self.grouped_data['TS_CODE'].str[:1]=='2'),'UN'] = 2 #OK.
+		self.grouped_data.loc[(self.grouped_data['UN'].isnull()) & (self.grouped_data['TS_CODE'].str[:1]=='3'),'UN'] = 3 #OK.
+		self.grouped_data.loc[(self.grouped_data['UN'].isnull()) & (self.grouped_data['TS_CODE'].str[:1]=='4'),'UN'] = 4 #OK.
+		self.grouped_data.loc[(self.grouped_data['UN'].isnull()) & (self.grouped_data['TS_CODE'].str[:1]=='5'),'UN'] = 5 #OK.
+		self.grouped_data.loc[(self.grouped_data['UN'].isnull()) & (self.grouped_data['TS_CODE'].str[:1]=='B'),'UN'] = 6 #OK.
+		self.grouped_data.loc[(self.grouped_data['UN'].isnull()) & (self.grouped_data['TS_CODE'].str[:1]=='F'),'UN'] = 7 #OK.
