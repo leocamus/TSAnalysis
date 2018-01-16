@@ -142,5 +142,12 @@ def runCompleteProcess():
 	clean_complete_evasion = deleteDuplicatedInCompleteEvasion(complete_evasion)
 	clean_complete_evasion_w_codes = mergeTransantiagoCodes(clean_complete_evasion)
 	processed_evasion = processCompleteEvasionDataFrame(clean_complete_evasion_w_codes)
-
 	return processed_evasion
+
+def updateCommonDates(df):
+	#Could be better coded.
+	currentSSHDates = TransantiagoConstants.updateCurrentSSHDates()
+	measured_dates = set(df['FECHA'])
+	evasion_dates = [x.strftime('%Y-%m-%d') for x in measured_dates]
+	common_dates = 	sorted(list(set(evasion_dates).intersection(currentSSHDates)))
+	return common_dates
