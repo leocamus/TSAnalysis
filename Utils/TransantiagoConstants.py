@@ -165,7 +165,7 @@ RFADir = fourLevelsUp + r'\03_datos\06_RFA'
 def updateCurrentSSHDates():
 	currentSSHDates = [] #Cleaning and filling again
 	for file in os.listdir(SSHDir):
-		if file.endswith('.etapas.gz'):
-			date = file.split('.')[0]
+		if file.endswith('.etapas'):
+			date = file.split('_')[0]
 			currentSSHDates.append(date)
 	return currentSSHDates
