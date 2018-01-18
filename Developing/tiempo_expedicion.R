@@ -26,6 +26,13 @@ file_name <- list.files()
 for (i in file_name) {
   #reading files
   perfiles <- read.csv(gzfile(i), sep = "|", header = TRUE)
+  torniquete <- read.csv(file = "torniquetes.csv", header = TRUE, sep = ";")
+  
+  
+  #Changing class variable
+  torniquete <- torniquete[,1:2]
+  names(torniquete)[2] <- "Instalacion"
+  torniquete$Instalacion <- as.Date(torniquete$Instalacion)
   
   #Collapsing the table by idExpedition
   dframe <- data.table(perfiles)
@@ -56,6 +63,23 @@ for (i in file_name) {
   dframe_neg$texp_corr <- dframe_neg$ti_0 + dframe_neg$tf_1
   
   dframe$texpedicion[which(dframe$texpedicion < 0)] <- period_to_seconds(dframe_neg$texp_corr)/60
+  
+  #Adding turnstile information.
+  dframe <- merge(dframe, torniquete, by= "Patente", all.x = TRUE)
+  
+  #Keeping 2017 turnstile style
+  dframe <- subset(dframe, is.na(dframe$Instalacion) | year(dframe$Instalacion) == 2017)
+  
+  #Turnstile during the expedition?
+  dframe$turnstile[is.na(dframe$Instalacion)] <- 0
+  dframe$turnstile[which(dframe$Date >= dframe$Instalacion)] <- 1
+  dframe$turnstile[which(dframe$Date < dframe$Instalacion)] <- 0
+  
+  
+  
+  ###############################
+  
+  
   
   #Expedition time analysis
   #We split the data into several dataframe by bus line and time period.
@@ -101,7 +125,7 @@ for (i in file_name) {
                         })
   
   
-
+  
 }
 
 
