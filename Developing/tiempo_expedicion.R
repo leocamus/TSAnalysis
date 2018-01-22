@@ -15,7 +15,10 @@ getLibraries <- function(libs) {
 libs <- c("data.table",
           "plyr",
           "lubridate",
-          "chron")
+          "chron",
+          "ggplot2",
+          "ggpubr",
+          "gridExtra")
 
 getLibraries(libs)
 
@@ -26,13 +29,16 @@ file_name <- list.files()
 for (i in file_name) {
   #reading files
   perfiles <- read.csv(gzfile(i), sep = "|", header = TRUE)
+  torn_marip <- read.csv(file = "torniquetes_mariposa.csv", header = TRUE, sep = ";")
   torniquete <- read.csv(file = "torniquetes.csv", header = TRUE, sep = ";")
-  
+  torniquete <- torniquete[,1:2]
   
   #Changing class variable
-  torniquete <- torniquete[,1:2]
-  names(torniquete)[2] <- "Instalacion"
+  names(torn_marip)[3] <- "Fecha_mariposa"
+  
   torniquete$Instalacion <- as.Date(torniquete$Instalacion)
+  torn_marip$Fecha_mariposa <- as.Date(torn_marip$Fecha_mariposa)
+  
   
   #Collapsing the table by idExpedition
   dframe <- data.table(perfiles)
@@ -64,21 +70,26 @@ for (i in file_name) {
   
   dframe$texpedicion[which(dframe$texpedicion < 0)] <- period_to_seconds(dframe_neg$texp_corr)/60
   
+  
+  
   #Adding turnstile information.
+  dframe <- merge(dframe, torn_marip, by= "Patente", all.x = TRUE)
   dframe <- merge(dframe, torniquete, by= "Patente", all.x = TRUE)
   
-  #Keeping 2017 turnstile style
-  dframe <- subset(dframe, is.na(dframe$Instalacion) | year(dframe$Instalacion) == 2017)
   
   #Turnstile during the expedition?
-  dframe$turnstile[is.na(dframe$Instalacion)] <- 0
-  dframe$turnstile[which(dframe$Date >= dframe$Instalacion)] <- 1
-  dframe$turnstile[which(dframe$Date < dframe$Instalacion)] <- 0
+  dframe$turnstile[is.na(dframe$Instalacion) & is.na(dframe$Fecha_mariposa)] <- 0
+  dframe$turnstile_marip[is.na(dframe$Instalacion) & is.na(dframe$Fecha_mariposa)] <- 0
   
+  #Indexes
+  ind_na <- which(is.na(dframe$turnstile))
+
+  #Turnstile during the expedition?
+  dframe$turnstile[ind_na] <- ifelse(dframe$Date[ind_na] > pmin(dframe$Fecha_mariposa[ind_na],dframe$Instalacion[ind_na],na.rm = TRUE),1,0)
   
-  
-  ###############################
-  
+  #Turnstile during the expedition? 2017 style
+  dframe$turnstile_marip[ind_na] <- ifelse(dframe$Date[ind_na] > dframe$Fecha_mariposa[ind_na],1,0)
+  dframe$turnstile_marip[is.na(dframe$turnstile_marip)] <- 0
   
   
   #Expedition time analysis
@@ -92,41 +103,86 @@ for (i in file_name) {
   exped_s_out <- lapply(expediciones, 
                         FUN = function(dataframe){
                           
-                          pdf(file = paste(unique(dataframe$ServicioSentido),"-",unique(dataframe$PeriodoTSExpedicion), ".pdf", sep = ""))
+                          #Subsetting dataframe by turnstile usage
+                          dataframe_st <- subset(dataframe, dataframe$turnstile == 0)
+                          dataframe_ct <- subset(dataframe, dataframe$turnstile_marip == 1)
                           
-                          #Plot frame
-                          par(mfrow=c(3, 2), oma=c(0,0,3,0))
+                          if(nrow(dataframe_st)>0 & nrow(dataframe_ct) > 0){
+                            
+                            #Combining two datasets
+                            dataset <- rbind(dataframe_ct,dataframe_st)
+                            dataset$categoria <- c(rep("C/T", nrow(dataframe_ct)),rep("S/T",nrow(dataframe_st)))
+                            
+                            pdf(file = paste(unique(dataframe$ServicioSentido),"-",unique(dataframe$PeriodoTSExpedicion), ".pdf", sep = ""), 10,5)
+                            
+                            #Boxplots
+                            b1 <- ggplot(data = dataframe_ct, aes(x= "", y= texpedicion)) + 
+                              geom_boxplot() +
+                              xlab("") +
+                              ylab("TExpedicion (min)") +
+                              coord_cartesian(ylim = c(min(dataframe_ct$texpedicion,dataframe_st$texpedicion), max(dataframe_ct$texpedicion,dataframe_st$texpedicion))) +
+                              ggtitle("With turnstile")
+                            
+                            b2 <- ggplot(data = dataframe_st, aes(x= "", y= texpedicion)) + 
+                              geom_boxplot() +
+                              xlab("") +
+                              ylab("TExpedicion (min)") +
+                              coord_cartesian(ylim = c(min(dataframe_ct$texpedicion,dataframe_st$texpedicion), max(dataframe_ct$texpedicion,dataframe_st$texpedicion))) +
+                              ggtitle("Without turnstile")
+                            
+                            p1 <- ggplot(data=dataset, aes(x=1:nrow(dataset), y=dataset$texpedicion, col=categoria)) + 
+                              geom_point() +
+                              xlab("Obs.") +
+                              ylab("TExpedicion (min)") +
+                              theme(legend.position = c(0.095,0.95),
+                                    legend.title = element_blank()) + 
+                              coord_cartesian(ylim = c(min(dataframe_ct$texpedicion,dataframe_st$texpedicion), max(dataframe_ct$texpedicion,dataframe_st$texpedicion))) +
+                              ggtitle("Dataset")
+                            
                           
-                          #Boxplot and points with extreme values
-                          boxplot(dataframe$texpedicion, main="Full data")
-                          plot(1:nrow(dataframe), dataframe$texpedicion, xlab = "Observations", ylab = "Expedition Time (min)")
+                            #Plotting
+                            grid.arrange(b1, b2, p1, ncol = 3, nrow = 1, widths=c(1,1,2.5), top= paste(unique(dataframe$ServicioSentido),"-",unique(dataframe$PeriodoTSExpedicion), sep = ""))
+                            
+                            dev.off()
+                            
+                          }
+                        })
                           
-                          #Identifying outliers
-                          boxplot_out <- boxplot.stats(dataframe$texpedicion, coef = 1.5)
                           
-                          #Identifying extreme values
-                          boxplot_extreme <- boxplot.stats(dataframe$texpedicion, coef = 3)
                           
-                          #Deleting outliers and extreme values
-                          dtframe_out <- subset(dataframe, !(dataframe$texpedicion %in% boxplot_out$out))
-                          dtframe_extreme <- subset(dataframe, !(dataframe$texpedicion %in% boxplot_extreme$out))
                           
-                          #Boxplot and observations without extreme values
-                          boxplot(dtframe_extreme$texpedicion, main="Without extreme values")
-                          plot(1:nrow(dtframe_extreme), dtframe_extreme$texpedicion, xlab = "Observations", ylab = "Expedition Time (min)")
                           
-                          #Boxplot and points without outliers
-                          boxplot(dtframe_out$texpedicion, main="Without outliers")
-                          plot(1:nrow(dtframe_out), dtframe_out$texpedicion, xlab = "Observations", ylab = "Expedition Time (min)")
-                          title(paste(unique(dataframe$ServicioSentido),unique(dataframe$PeriodoTSExpedicion), sep = "-"), outer=TRUE)
+
+          
                           
-                          dev.off()
+                          
+                          
+                          # #Identifying outliers
+                          # boxplot_out <- boxplot.stats(dataframe$texpedicion, coef = 1.5)
+                          # 
+                          # #Identifying extreme values
+                          # boxplot_extreme <- boxplot.stats(dataframe$texpedicion, coef = 3)
+                          # 
+                          # #Deleting outliers and extreme values
+                          # dtframe_out <- subset(dataframe, !(dataframe$texpedicion %in% boxplot_out$out))
+                          # dtframe_extreme <- subset(dataframe, !(dataframe$texpedicion %in% boxplot_extreme$out))
+                          # 
+                          # #Boxplot and observations without extreme values
+                          # boxplot(dtframe_extreme$texpedicion, main="Without extreme values")
+                          # plot(1:nrow(dtframe_extreme), dtframe_extreme$texpedicion, xlab = "Observations", ylab = "Expedition Time (min)")
+                          # 
+                          # #Boxplot and points without outliers
+                          # boxplot(dtframe_out$texpedicion, main="Without outliers")
+                          # plot(1:nrow(dtframe_out), dtframe_out$texpedicion, xlab = "Observations", ylab = "Expedition Time (min)")
+                          # title(paste(unique(dataframe$ServicioSentido),unique(dataframe$PeriodoTSExpedicion), sep = "-"), outer=TRUE)
+                          # 
+                          #dev.off()
                           
                         })
   
   
   
-}
+
 
 
 
