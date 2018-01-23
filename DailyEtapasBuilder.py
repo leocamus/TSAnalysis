@@ -2,6 +2,8 @@
 from Utils import SimplifyFilesUtils
 from Utils import HeadersUtils
 from Utils import TransantiagoConstants
+from Utils import ReadTurnstilesDataBase
+
 import pandas as pd
 import numpy as np
 import os
@@ -35,22 +37,33 @@ class RunSilentlyDailyEtapasBuilderClass:
 		except ValueError as dateErr:
 			print(dateErr)
 
-		self.etapas_df = pd.read_table(simplifiedEtapasPath, sep='|', encoding='latin-1')
+		self.etapas_df = pd.read_table(simplifiedEtapasPath, sep='|', encoding='latin-1', parse_dates = [3])
 
 	def mergeTurnstileData(self):
-		"""Merges the loaded etapas-file with the turnstile-file.fecha_instalacion into a pandas df and returns it"""
-		torniquetesFile = 'Avance_Consolidado_v2.xlsx'
-		torniquetesDataPath = os.path.join(RunSilentlyDailyEtapasBuilderClass.busesTorniqueteDir, torniquetesFile)
-		busesTorniquete_df = pd.read_excel(torniquetesDataPath)
-		busesTorniquete_df.columns=['sitio_subida','fecha_instalacion']
-		self.etapas_df = pd.merge(self.etapas_df,busesTorniquete_df, on='sitio_subida', how='left')
-		checking_missing = pd.isnull(self.etapas_df['fecha_instalacion'])
-		print('Not found in turnstile database: ' + str(sum(checking_missing))) #Without turnstiles, then NaT.
-		self.etapas_df.loc[:,'fecha_instalacion'] = pd.to_datetime(self.etapas_df.loc[:,'fecha_instalacion'])
+		"""Merges the loaded etapas-file with the turnstile-file.fecha_instalacion into a pandas df"""
+		[ana_turnstiles_df, mauricio_turnstiles_df] = ReadTurnstilesDataBase.readTurnstileData()
+		ana_turnstiles_df = ReadTurnstilesDataBase.processAnaTurnstiles(ana_turnstiles_df)
+
+		self.etapas_df = self.etapas_df.merge(ana_turnstiles_df, left_on = 'sitio_subida', right_on = 'sitio_subida', how='left')
+		self.etapas_df = self.etapas_df.merge(mauricio_turnstiles_df, left_on = 'sitio_subida', right_on = 'sitio_subida' , suffixes=('_ana', '_mauricio'), how='left')
+
+#		del self.etapas_df['sitio_subida_ana']
+#		del self.etapas_df['sitio_subida_mauricio']
+
+		checking_missing = pd.isnull(self.etapas_df['fecha_instalacion_ana'])&pd.isnull(self.etapas_df['fecha_instalacion_mauricio'])
+		print('Not found in BOTH turnstile databases: ' + str(sum(checking_missing))) #Without turnstiles, then NaT.
+
+		torniquetes_mariposa_conditions = (self.etapas_df.loc[:,'fecha_instalacion_ana'].dt.date<self.etapas_df.loc[:,'t_subida'].dt.date)
+		
+		self.etapas_df['min_fecha'] = pd.concat([self.etapas_df['fecha_instalacion_ana'], self.etapas_df['fecha_instalacion_mauricio']], axis=1).min(axis=1)
+		no_torniquetes_conditions = (((self.etapas_df.loc[:,'fecha_instalacion_ana'].isnull()) & (self.etapas_df.loc[:,'fecha_instalacion_mauricio'].isnull())) | (self.etapas_df.loc[:,'t_subida'].dt.date<=self.etapas_df['min_fecha'].dt.date))
+
+		self.etapas_df.loc[:,'torniquete_mariposa'] = np.where(torniquetes_mariposa_conditions,1,0)
+		self.etapas_df.loc[:,'no_torniquete'] = np.where(no_torniquetes_conditions,1,0)
 
 	def cleanDataFrame(self):
 		"""Returns a clean pandas dataframe without '-' values"""	
-		self.etapas_df = self.etapas_df[self.etapas_df['t_subida'] != '-']
+		self.etapas_df = self.etapas_df[(~self.etapas_df['t_subida'].isnull())]
 		self.etapas_df = self.etapas_df[self.etapas_df['servicio_subida'] != '-']
 		self.etapas_df = self.etapas_df[self.etapas_df['par_subida'] != '-']
 		self.etapas_df = self.etapas_df[self.etapas_df['sitio_subida'] != '-']
@@ -67,13 +80,11 @@ class RunSilentlyDailyEtapasBuilderClass:
 		self.etapas_df['mismo_servicio'] = (self.etapas_df['servicio_subida']==self.etapas_df['servicio_subida'].shift()).fillna(False)
 		self.etapas_df.loc[(self.etapas_df['mismo_servicio'] == True) & (self.etapas_df['mismo_paradero'] == True) & (self.etapas_df['misma_patente'] == True), 'diferencia_tiempo'] = (self.etapas_df['t_subida']-self.etapas_df['t_subida'].shift())
 		self.etapas_df['diferencia_tiempo_secs'] = self.etapas_df['diferencia_tiempo'].dt.total_seconds()
-		self.etapas_df['si_torniquete'] = (self.etapas_df['fecha_instalacion']<=self.etapas_df['t_subida'])
-		self.etapas_df['si_2017_torniquete'] = ((self.etapas_df['fecha_instalacion']<=self.etapas_df['t_subida'])&(self.etapas_df['fecha_instalacion']>=pd.to_datetime('2017-01-01')))
 
 	def filteringDf(self):
 		"""Returns filtered_df, filtered_turnstile_df, filtered_no_turnstile_df"""
 		filtered_df = self.etapas_df[(self.etapas_df['mismo_servicio']==True) & (self.etapas_df['mismo_paradero']==True) & (self.etapas_df['misma_patente']==True)]
-		filtered_turnstile_df = filtered_df[filtered_df['si_2017_torniquete']==True] #Only 2017 turnstiles
-		filtered_no_turnstile_df = filtered_df[filtered_df['si_torniquete']==False]  #Never-installed turnstiles.
+		filtered_turnstile_df = filtered_df[filtered_df['torniquete_mariposa']==1] #Only 'mariposa' turnstiles
+		filtered_no_turnstile_df = filtered_df[filtered_df['no_torniquete']==1]  #Never-installed turnstiles.
 		return filtered_df, filtered_turnstile_df, filtered_no_turnstile_df
 		

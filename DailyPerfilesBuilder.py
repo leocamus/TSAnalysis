@@ -2,6 +2,8 @@
 from Utils import SimplifyFilesUtils
 from Utils import HeadersUtils
 from Utils import TransantiagoConstants
+from Utils import ReadTurnstilesDataBase
+
 import pandas as pd
 import numpy as np
 import os
@@ -44,26 +46,36 @@ class RunSilentlyDailyPerfilesBuilderClass:
 		except ValueError as dateErr:
 			print(dateErr)
 
-		self.perfiles_df = pd.read_table(simplifiedPerfilesPath, sep='|', parse_dates = [3,4] ,encoding='latin-1')
+		self.perfiles_df = pd.read_table(simplifiedPerfilesPath, sep='|', parse_dates = [3,4] ,encoding='latin-1') #dates are parsed as pandas._libs.tslib.Timestamp
 
 	def dropParaderos(self):
 		self.perfiles_df.drop_duplicates(['ServicioSentido','Patente','idExpedicion'], keep='first', inplace=True)
 		self.perfiles_df.reset_index(drop=True,inplace=True)
 
 	def mergeTurnstileDatabase(self):
-		"""Merges the loaded etapas-file with the turnstile-file.fecha_instalacion into a pandas df and returns it"""
-		torniquetesFile = 'Avance_Consolidado_v2.xlsx'
-		torniquetesDataPath = os.path.join(RunSilentlyDailyPerfilesBuilderClass.busesTorniqueteDir, torniquetesFile)
-		busesTorniquete_df = pd.read_excel(torniquetesDataPath, encoding = 'latin-1')
-		busesTorniquete_df.columns=['sitio_subida','fecha_instalacion']
-		self.perfiles_df = self.perfiles_df.merge(busesTorniquete_df, left_on='Patente', right_on = 'sitio_subida', how='left')
-		checking_missing = pd.isnull(self.perfiles_df['fecha_instalacion'])
-		print('Not found in turnstile database: ' + str(sum(checking_missing))) #Without turnstiles, then NaT.
-		self.perfiles_df.loc[:,'torniquete_2017_fecha'] = np.where(((self.perfiles_df.loc[:,'fecha_instalacion']>=pd.to_datetime('2017-01-01')) & (self.perfiles_df['fecha_instalacion'] < self.perfiles_df['Hini'])),1,0)
-		self.perfiles_df.loc[:,'sin_torniquete'] = np.where((self.perfiles_df.loc[:,'fecha_instalacion'].isnull()),1,0)
+		"""Merges the loaded perfiles-file with the turnstile-file.fecha_instalacion into a pandas df"""
+		[ana_turnstiles_df, mauricio_turnstiles_df] = ReadTurnstilesDataBase.readTurnstileData()
+		ana_turnstiles_df = ReadTurnstilesDataBase.processAnaTurnstiles(ana_turnstiles_df)
+
+		self.perfiles_df = self.perfiles_df.merge(ana_turnstiles_df, left_on = 'Patente', right_on = 'sitio_subida', how='left')
+		self.perfiles_df = self.perfiles_df.merge(mauricio_turnstiles_df, left_on = 'Patente', right_on = 'sitio_subida' , suffixes=('_ana', '_mauricio'), how='left')
+
+		del self.perfiles_df['sitio_subida_ana']
+		del self.perfiles_df['sitio_subida_mauricio']
+
+		checking_missing = pd.isnull(self.perfiles_df['fecha_instalacion_ana'])&pd.isnull(self.perfiles_df['fecha_instalacion_mauricio'])
+		print('Not found in BOTH turnstile databases: ' + str(sum(checking_missing))) #Without turnstiles, then NaT.
+
+		torniquetes_mariposa_conditions = (self.perfiles_df.loc[:,'fecha_instalacion_ana'].dt.date<self.perfiles_df.loc[:,'Hini'].dt.date)
+		
+		self.perfiles_df['min_fecha'] = pd.concat([self.perfiles_df['fecha_instalacion_ana'], self.perfiles_df['fecha_instalacion_mauricio']], axis=1).min(axis=1)
+		no_torniquetes_conditions = (((self.perfiles_df.loc[:,'fecha_instalacion_ana'].isnull()) & (self.perfiles_df.loc[:,'fecha_instalacion_mauricio'].isnull())) | (self.perfiles_df.loc[:,'Hini'].dt.date<=self.perfiles_df['min_fecha'].dt.date))
+
+		self.perfiles_df.loc[:,'torniquete_mariposa'] = np.where(torniquetes_mariposa_conditions,1,0)
+		self.perfiles_df.loc[:,'no_torniquete'] = np.where(no_torniquetes_conditions,1,0)
 
 	def groupByTurnstilePresence(self):
-		f = {'torniquete_2017_fecha': [RunSilentlyDailyPerfilesBuilderClass.total], 'sin_torniquete': [RunSilentlyDailyPerfilesBuilderClass.total]}
+		f = {'torniquete_mariposa': [RunSilentlyDailyPerfilesBuilderClass.total], 'no_torniquete': [RunSilentlyDailyPerfilesBuilderClass.total]}
 		self.grouped_data = self.perfiles_df.groupby(['ServicioSentido']).agg(f)
 		self.grouped_data.reset_index(inplace=True)
 		columns = []
