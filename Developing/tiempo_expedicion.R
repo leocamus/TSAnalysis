@@ -1,6 +1,4 @@
 
-#Setting working space
-setwd("/Users/diego/Desktop/Evasion/01_analisis/03_datos/01_SSH")
 
 ##Function to load libraries and install packages, if necessary
 getLibraries <- function(libs) {
@@ -22,24 +20,39 @@ libs <- c("data.table",
 
 getLibraries(libs)
 
+#Setting working space
+setwd("/Users/diego/Desktop/Evasion/01_analisis/03_datos/")
+
+#Creating dataframe
+dataframe <- data.frame()
+
+#reading files
+route <- as.vector(read.csv(file = "recorridos.csv", sep = ",", header = FALSE)[,])
+torn_marip <- read.csv(file = "torniquetes_mariposa.csv", header = TRUE, sep = ";")
+torniquete <- read.csv(file = "torniquetes.csv", header = TRUE, sep = ";")
+torniquete <- torniquete[,1:2]
+
+#Changing class variable
+names(torn_marip)[3] <- "Fecha_mariposa"
+
+torniquete$Instalacion <- as.Date(torniquete$Instalacion)
+torn_marip$Fecha_mariposa <- as.Date(torn_marip$Fecha_mariposa)
+
+#Setting working space
+setwd("/Users/diego/Desktop/Evasion/01_analisis/03_datos/01_SSH")
+
 #Getting files names in the directory
 file_name <- list.files()
 
-
 for (i in file_name) {
+  
   #reading files
   perfiles <- read.csv(gzfile(i), sep = "|", header = TRUE)
-  torn_marip <- read.csv(file = "torniquetes_mariposa.csv", header = TRUE, sep = ";")
-  torniquete <- read.csv(file = "torniquetes.csv", header = TRUE, sep = ";")
-  torniquete <- torniquete[,1:2]
   
-  #Changing class variable
-  names(torn_marip)[3] <- "Fecha_mariposa"
+  #Subsetting perfiles by route number
+  perfiles <- perfiles[grepl(paste(route, collapse = "|"), perfiles$ServicioSentido),]
   
-  torniquete$Instalacion <- as.Date(torniquete$Instalacion)
-  torn_marip$Fecha_mariposa <- as.Date(torn_marip$Fecha_mariposa)
-  
-  
+
   #Collapsing the table by idExpedition
   dframe <- data.table(perfiles)
   dframe <- dframe[, list(Subidastotal = sum(Subidastotal),
@@ -56,6 +69,13 @@ for (i in file_name) {
   dframe$Date <- as.Date(dframe$Hini)
   dframe$ti <- format(as.POSIXct(dframe$Hini) ,format = "%H:%M:%S")
   dframe$tf <- format(as.POSIXct(dframe$Hfin) ,format = "%H:%M:%S")
+  
+  #Adding half hour of the day
+  dframe$media_hora <- 2*hour(hms(dframe$ti)) + ifelse(minute(hms(dframe$ti)) < 30,1,2)
+  
+  #Adding weekday (Staring from Sunday: 0)
+  dframe$wday <- wday(dframe$Date)
+  dframe$weekday <- weekdays(dframe$Date)
   
   
   #Adding expedition time
@@ -91,63 +111,132 @@ for (i in file_name) {
   dframe$turnstile_marip[ind_na] <- ifelse(dframe$Date[ind_na] > dframe$Fecha_mariposa[ind_na],1,0)
   dframe$turnstile_marip[is.na(dframe$turnstile_marip)] <- 0
   
+  #Combining days
+  dataframe <- rbind(dataframe,dframe)
   
-  #Expedition time analysis
-  #We split the data into several dataframe by bus line and time period.
-  expediciones <- split(dframe, list(dframe$ServicioSentido, dframe$PeriodoTSExpedicion))
-  
-  #Deleting dataframe without data
-  expediciones <- Filter(function(x) dim(x)[1] > 0, expediciones)
-  
-  #Boxplot per dataframe
-  exped_s_out <- lapply(expediciones, 
-                        FUN = function(dataframe){
+}
+
+#Saving as original dataframe
+dataframe_orig <- dataframe
+
+#Changing class
+dataframe$weekday <- factor(dataframe$weekday, levels = unique(dataframe$weekday))
+
+#Expedition time analysis
+#We split the data into several dataframe by bus line and time period.
+expediciones <- split(dataframe, list(dataframe$ServicioSentido, dataframe$PeriodoTSExpedicion))
+
+#Deleting dataframe without data
+expediciones <- Filter(function(x) dim(x)[1] > 0, expediciones)
+
+
+
+#Boxplot per dataframe
+boxplot_exp <- lapply(expediciones, 
+                      FUN = function(dataframe){
+                        
+                        #Subsetting dataframe by turnstile usage
+                        dataframe_st <- subset(dataframe, dataframe$turnstile == 0)
+                        dataframe_ct <- subset(dataframe, dataframe$turnstile_marip == 1)
+                        
+                        if(nrow(dataframe_st) > 0 & nrow(dataframe_ct) > 0){
                           
-                          #Subsetting dataframe by turnstile usage
-                          dataframe_st <- subset(dataframe, dataframe$turnstile == 0)
-                          dataframe_ct <- subset(dataframe, dataframe$turnstile_marip == 1)
+                          #Combining two datasets
+                          dataset <- rbind(dataframe_ct,dataframe_st)
+                          dataset$categoria <- c(rep("C/T", nrow(dataframe_ct)),rep("S/T",nrow(dataframe_st)))
                           
-                          if(nrow(dataframe_st)>0 & nrow(dataframe_ct) > 0){
+                          # pdf(file = paste(unique(dataframe$ServicioSentido),"-",unique(dataframe$PeriodoTSExpedicion), ".pdf", sep = ""), 10,5)
+                          
+                          #Boxplots
+                          b1 <- ggplot(data = dataframe_ct, aes(x= "", y= texpedicion)) + 
+                            geom_boxplot() +
+                            xlab("") +
+                            stat_summary(fun.y = mean, colour= "green", geom="point", 
+                                         shape=18, size=3) +
+                            ylab("TExpedicion (min)") +
+                            coord_cartesian(ylim = c(min(dataframe_ct$texpedicion,dataframe_st$texpedicion), max(dataframe_ct$texpedicion,dataframe_st$texpedicion))) +
+                            ggtitle("With turnstile")
+                          
+                          b2 <- ggplot(data = dataframe_st, aes(x= "", y= texpedicion)) + 
+                            geom_boxplot() +
+                            xlab("") +
+                            ylab("TExpedicion (min)") +
+                            stat_summary(fun.y = mean, colour= "green", geom="point", 
+                                         shape=18, size=3) +
+                            coord_cartesian(ylim = c(min(dataframe_ct$texpedicion,dataframe_st$texpedicion), max(dataframe_ct$texpedicion,dataframe_st$texpedicion))) +
+                            ggtitle("Without turnstile")
+                          
+                          p1 <- ggplot(data=dataset, aes(x=1:nrow(dataset), y=dataset$texpedicion, col=categoria)) + 
+                            geom_point() +
+                            xlab("Obs.") +
+                            ylab("TExpedicion (min)") +
+                            theme(legend.position = c(0.095,0.92),
+                                  legend.title = element_blank(),
+                                  axis.text.x = element_blank()) +
+                            coord_cartesian(ylim = c(min(dataframe_ct$texpedicion,dataframe_st$texpedicion), max(dataframe_ct$texpedicion,dataframe_st$texpedicion))) +
+                            ggtitle("Dataset")
+                          
+                          
+                          #Plotting
+                          grid.arrange(b1, b2, p1, ncol = 3, nrow = 1, widths=c(1,1,2.5), top= paste(unique(dataframe$ServicioSentido),"-",unique(dataframe$PeriodoTSExpedicion), sep = ""))
+                          
+                          # dev.off()
+                          
+                          
+                          
+                          
+                          #Creating boxplot per day
+                          if(length(unique(dataframe_ct$wday)) == 5 & length(unique(dataframe_st$wday)) == 5){
                             
-                            #Combining two datasets
-                            dataset <- rbind(dataframe_ct,dataframe_st)
-                            dataset$categoria <- c(rep("C/T", nrow(dataframe_ct)),rep("S/T",nrow(dataframe_st)))
-                            
-                            pdf(file = paste(unique(dataframe$ServicioSentido),"-",unique(dataframe$PeriodoTSExpedicion), ".pdf", sep = ""), 10,5)
+                            # pdf(file = paste("BOX_SEMANA - ",unique(dataframe$ServicioSentido),"-",unique(dataframe$PeriodoTSExpedicion), ".pdf", sep = ""), 10,5)
                             
                             #Boxplots
-                            b1 <- ggplot(data = dataframe_ct, aes(x= "", y= texpedicion)) + 
-                              geom_boxplot() +
+                            b1 <- ggplot(data = dataframe_ct, aes(x= weekday, y= texpedicion)) + 
+                              geom_boxplot(aes(fill=weekday)) +
                               xlab("") +
                               ylab("TExpedicion (min)") +
+                              theme(legend.position="none") +
                               coord_cartesian(ylim = c(min(dataframe_ct$texpedicion,dataframe_st$texpedicion), max(dataframe_ct$texpedicion,dataframe_st$texpedicion))) +
                               ggtitle("With turnstile")
                             
-                            b2 <- ggplot(data = dataframe_st, aes(x= "", y= texpedicion)) + 
-                              geom_boxplot() +
+                            b2 <- ggplot(data = dataframe_st, aes(x= weekday, y= texpedicion)) + 
+                              geom_boxplot(aes(fill=weekday)) +
                               xlab("") +
                               ylab("TExpedicion (min)") +
                               coord_cartesian(ylim = c(min(dataframe_ct$texpedicion,dataframe_st$texpedicion), max(dataframe_ct$texpedicion,dataframe_st$texpedicion))) +
                               ggtitle("Without turnstile")
                             
-                            p1 <- ggplot(data=dataset, aes(x=1:nrow(dataset), y=dataset$texpedicion, col=categoria)) + 
-                              geom_point() +
-                              xlab("Obs.") +
-                              ylab("TExpedicion (min)") +
-                              theme(legend.position = c(0.095,0.95),
-                                    legend.title = element_blank()) + 
-                              coord_cartesian(ylim = c(min(dataframe_ct$texpedicion,dataframe_st$texpedicion), max(dataframe_ct$texpedicion,dataframe_st$texpedicion))) +
-                              ggtitle("Dataset")
                             
-                          
                             #Plotting
-                            grid.arrange(b1, b2, p1, ncol = 3, nrow = 1, widths=c(1,1,2.5), top= paste(unique(dataframe$ServicioSentido),"-",unique(dataframe$PeriodoTSExpedicion), sep = ""))
+                            grid.arrange(b1, b2, ncol = 2, nrow = 1, widths=c(1,1.2), top= paste(unique(dataframe$ServicioSentido),"-",unique(dataframe$PeriodoTSExpedicion), sep = ""))
                             
-                            dev.off()
+                            
+                            # dev.off()
                             
                           }
-                        })
                           
+                          
+                          
+                          
+                          
+                          
+                        }
+                      })
+
+
+
+  #Adding next day
+  
+  
+  #Analyzing by day type
+  
+  
+  #
+  
+  
+  
+  
+  
                           
                           
                           
