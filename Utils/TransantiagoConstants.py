@@ -18,7 +18,7 @@ currentSSHDates = [
 '2017-03-11',
 '2017-03-12',
 '2017-03-13',
-'2017-03-14',
+'2017-03-14',#new_perfil
 '2017-03-15',
 '2017-03-16',
 '2017-03-17',
@@ -27,13 +27,13 @@ currentSSHDates = [
 '2017-03-26',
 '2017-04-08',
 '2017-04-09',
-'2017-04-10',
+'2017-04-10',#new_etapa,new_perfil
 '2017-04-11',
 '2017-04-12',
 '2017-04-14',
 '2017-04-15',
 '2017-04-16',
-'2017-04-17',
+'2017-04-17',#new_etapa
 '2017-04-18',
 '2017-04-19',
 '2017-04-20',
@@ -60,7 +60,7 @@ currentSSHDates = [
 '2017-05-20',
 '2017-05-21',
 '2017-05-22',
-'2017-05-25',
+'2017-05-25',#new_perfil
 '2017-05-26',
 '2017-05-27',
 '2017-05-28',
@@ -71,7 +71,7 @@ currentSSHDates = [
 '2017-06-02',
 '2017-06-03',
 '2017-06-04',
-'2017-06-05',
+'2017-06-05',#new_etapa
 '2017-06-13',
 '2017-06-14',
 '2017-06-15',
@@ -98,7 +98,7 @@ currentSSHDates = [
 '2017-07-08',
 '2017-07-09',
 '2017-07-10',
-'2017-07-11',
+'2017-07-11',#perfil doesn't exist
 '2017-07-12',
 '2017-07-13',
 '2017-07-14',
@@ -165,7 +165,7 @@ RFADir = fourLevelsUp + r'\03_datos\06_RFA'
 def updateCurrentSSHDates():
 	currentSSHDates = [] #Cleaning and filling again
 	for file in os.listdir(SSHDir):
-		if file.endswith('.etapas'):
+		if file.endswith('.etapas'): #Be aware that dates are updated based on etapas files
 			date = file.split('_')[0]
 			currentSSHDates.append(date)
 	return currentSSHDates
