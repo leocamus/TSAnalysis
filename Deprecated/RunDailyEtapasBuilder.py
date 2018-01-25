@@ -1,4 +1,4 @@
-"""Module to run the complete methodology for building histograms, and build it"""
+"""Module to run the complete methodology for building histograms, and build it. This module is currently DEPRECATED"""
 from Utils import SimplifyFilesUtils
 from Utils import HeadersUtils
 from Utils import TransantiagoConstants
