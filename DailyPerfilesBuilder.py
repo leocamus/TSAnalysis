@@ -9,6 +9,11 @@ import numpy as np
 import os
 import datetime as dt
 
+def loadCodes():
+	codes_path = os.path.join(RunSilentlyDailyPerfilesBuilderClass.DTPMDir, 'codes_services.xlsx')
+	codes = pd.read_excel(codes_path, encoding = 'latin-1')
+	return codes
+
 class RunSilentlyDailyPerfilesBuilderClass:
 
 	SSHDir = TransantiagoConstants.SSHDir
@@ -16,12 +21,7 @@ class RunSilentlyDailyPerfilesBuilderClass:
 	currentSSHDates = TransantiagoConstants.updateCurrentSSHDates()
 	DTPMDir = TransantiagoConstants.DTPMDir
 
-	def total(x): return (x == 1).sum()
-
-	def loadCodes():
-		codes_path = os.path.join(RunSilentlyDailyPerfilesBuilderClass.DTPMDir, 'codes_services.xlsx')
-		codes = pd.read_excel(codes_path, encoding = 'latin-1')
-		return codes
+	def totalWhenOne(x): return (x == 1).sum()
 
 	def __init__(self,date,vehicle='BUS',zp='0'):
 		self.analyzedDate = date
@@ -29,7 +29,6 @@ class RunSilentlyDailyPerfilesBuilderClass:
 		self.if_ZP = zp
 		self.perfiles_df = pd.DataFrame()
 		self.grouped_data = pd.DataFrame()
-		self.codes = pd.DataFrame()
 
 	def runSimplifyPerfiles(self):
 		"""Not always necessary. Reducing the complexity of the original etapas-file. Attributes to extract are hardcoded"""
@@ -75,7 +74,7 @@ class RunSilentlyDailyPerfilesBuilderClass:
 		self.perfiles_df.loc[:,'no_torniquete'] = np.where(no_torniquetes_conditions,1,0)
 
 	def groupByTurnstilePresence(self):
-		f = {'torniquete_mariposa': [RunSilentlyDailyPerfilesBuilderClass.total], 'no_torniquete': [RunSilentlyDailyPerfilesBuilderClass.total]}
+		f = {'torniquete_mariposa': [RunSilentlyDailyPerfilesBuilderClass.totalWhenOne], 'no_torniquete': [RunSilentlyDailyPerfilesBuilderClass.totalWhenOne]}
 		self.grouped_data = self.perfiles_df.groupby(['ServicioSentido']).agg(f)
 		self.grouped_data.reset_index(inplace=True)
 		columns = []
@@ -89,8 +88,7 @@ class RunSilentlyDailyPerfilesBuilderClass:
 
 		self.grouped_data.columns = columns
 
-	def appendUnidadNegocio(self):
-		codes = RunSilentlyDailyPerfilesBuilderClass.loadCodes()		
+	def appendUnidadNegocio(self):	
 		self.grouped_data['simplified_servicio'] = ''
 		self.grouped_data.loc[:,'simplified_servicio'] = self.grouped_data.loc[:,'ServicioSentido'].str.replace('T','')
 		self.grouped_data.loc[:,'simplified_servicio'] = self.grouped_data.loc[:,'simplified_servicio'].str.replace('00','')
@@ -99,6 +97,7 @@ class RunSilentlyDailyPerfilesBuilderClass:
 		self.grouped_data.loc[:,'DIRECTION'] = self.grouped_data.loc[:,'DIRECTION'].str.replace('R','Ret')
 		self.grouped_data.loc[:,'DIRECTION'] = self.grouped_data.loc[:,'DIRECTION'].str.replace('I','Ida')
 		#Before merging, codes['TS_CODE'] should be string type.
+		codes = loadCodes()	
 		codes['TS_CODE'] = codes['TS_CODE'].astype(str)
 		#Merging...
 		self.grouped_data = pd.merge(self.grouped_data,codes, on=['TS_CODE','DIRECTION'], how='left')
