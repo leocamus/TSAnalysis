@@ -50,9 +50,6 @@ class RunSilentlyDailyEtapasBuilderClass:
 #		del self.etapas_df['sitio_subida_ana']
 #		del self.etapas_df['sitio_subida_mauricio']
 
-		checking_missing = pd.isnull(self.etapas_df['fecha_instalacion_ana'])&pd.isnull(self.etapas_df['fecha_instalacion_mauricio'])
-		print('Not found in BOTH turnstile databases: ' + str(sum(checking_missing))) #Without turnstiles, then NaT.
-
 		torniquetes_mariposa_conditions = (self.etapas_df.loc[:,'fecha_instalacion_ana'].dt.date<self.etapas_df.loc[:,'t_subida'].dt.date)
 		
 		self.etapas_df['min_fecha'] = pd.concat([self.etapas_df['fecha_instalacion_ana'], self.etapas_df['fecha_instalacion_mauricio']], axis=1).min(axis=1)

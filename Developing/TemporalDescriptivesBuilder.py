@@ -2,6 +2,7 @@
 from Utils import SimplifyFilesUtils
 from Utils import HeadersUtils
 from Utils import TransantiagoConstants
+from Utils import ReadTurnstilesDataBase
 
 import DailyEtapasBuilder
 import pandas as pd
@@ -26,21 +27,26 @@ class TemporalDescriptivesBuilderClass:
 	DTPMDir = TransantiagoConstants.DTPMDir
 	currentSSHDates = TransantiagoConstants.updateCurrentSSHDates()
 
+	def firstRow(x): return x[0]
+
 	def __init__(self,date):
 		self.analyzedDate = date
 		self.df = pd.DataFrame()
 		self.grouped_data = pd.DataFrame()		
 		self.df = pd.DataFrame()
+		self.etapas_builder = DailyEtapasBuilder.RunSilentlyDailyEtapasBuilderClass(self.analyzedDate)
 
 	def loadEtapasAndOthers(self):
 		"""Loads the simplified etapas-file as pandas df"""
-		etapas_builder = DailyEtapasBuilder.RunSilentlyDailyEtapasBuilderClass(self.analyzedDate)
-		etapas_builder.loadSimplifiedEtapas()
-		etapas_builder.mergeTurnstileData()
-		etapas_builder.cleanDataFrame()
-		etapas_builder.sortDataFrame()
-		etapas_builder.postProcessingSortedDataFrame()
-		self.df = etapas_builder.etapas_df
+		self.etapas_builder.loadSimplifiedEtapas()
+		self.df = self.etapas_builder.etapas_df
+
+	def processEtapas(self):
+		self.etapas_builder.cleanDataFrame()
+		self.etapas_builder.mergeTurnstileData()#		
+		self.etapas_builder.sortDataFrame()
+		self.etapas_builder.postProcessingSortedDataFrame()
+		self.df = self.etapas_builder.etapas_df
 
 	def appendPeriods(self):
 		week = set([0,1,2,3,4])
@@ -80,7 +86,7 @@ class TemporalDescriptivesBuilderClass:
 			self.df = self.df.drop([n[0],n[1],n[2],n[3],n[4],n[5],n[6],n[7]],axis=1)
 
 	def groupData(self):
-		f = {'id':['count'], 'torniquete_mariposa':['unique']}
+		f = {'id':['count'], 'diferencia_tiempo_secs':['mean']}
 		self.grouped_data = self.df.groupby( [ 'PERIODO', 'sitio_subida', 'servicio_subida'] ).agg(f)
 		columns = []
 		for col in self.grouped_data.columns.values:
@@ -116,3 +122,22 @@ class TemporalDescriptivesBuilderClass:
 		self.grouped_data.loc[(self.grouped_data['UN'].isnull()) & (self.grouped_data['TS_CODE'].str[:1]=='5'),'UN'] = 5 #OK.
 		self.grouped_data.loc[(self.grouped_data['UN'].isnull()) & (self.grouped_data['TS_CODE'].str[:1]=='B'),'UN'] = 6 #OK.
 		self.grouped_data.loc[(self.grouped_data['UN'].isnull()) & (self.grouped_data['TS_CODE'].str[:1]=='F'),'UN'] = 7 #OK.
+
+	def mergeTurnstileData(self):
+		"""Merges the loaded etapas-file with the turnstile-file.fecha_instalacion into a pandas df"""
+		[ana_turnstiles_df, mauricio_turnstiles_df] = ReadTurnstilesDataBase.readTurnstileData()
+		ana_turnstiles_df = ReadTurnstilesDataBase.processAnaTurnstiles(ana_turnstiles_df)
+
+		self.grouped_data = self.grouped_data.merge(ana_turnstiles_df, left_on = 'sitio_subida', right_on = 'sitio_subida', how='left')
+		self.grouped_data = self.grouped_data.merge(mauricio_turnstiles_df, left_on = 'sitio_subida', right_on = 'sitio_subida' , suffixes=('_ana', '_mauricio'), how='left')
+
+#		del self.etapas_df['sitio_subida_ana']
+#		del self.etapas_df['sitio_subida_mauricio']
+
+		torniquetes_mariposa_conditions = (self.grouped_data.loc[:,'fecha_instalacion_ana'].dt.date<pd.to_datetime(self.analyzedDate).date())
+		
+		self.grouped_data['min_fecha'] = pd.concat([self.grouped_data['fecha_instalacion_ana'], self.grouped_data['fecha_instalacion_mauricio']], axis=1).min(axis=1)
+		no_torniquetes_conditions = (((self.grouped_data.loc[:,'fecha_instalacion_ana'].isnull()) & (self.grouped_data.loc[:,'fecha_instalacion_mauricio'].isnull())) | (pd.to_datetime(self.analyzedDate).date()<=self.grouped_data['min_fecha'].dt.date))
+
+		self.grouped_data.loc[:,'torniquete_mariposa'] = np.where(torniquetes_mariposa_conditions,1,0)
+		self.grouped_data.loc[:,'no_torniquete'] = np.where(no_torniquetes_conditions,1,0)
