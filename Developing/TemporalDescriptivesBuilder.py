@@ -27,7 +27,7 @@ class TemporalDescriptivesBuilderClass:
 	DTPMDir = TransantiagoConstants.DTPMDir
 	currentSSHDates = TransantiagoConstants.updateCurrentSSHDates()
 
-	def firstRow(x): return x[0]
+	def specialMean(x): return x[x<=20].mean()
 
 	def __init__(self,date):
 		self.analyzedDate = date
@@ -86,7 +86,7 @@ class TemporalDescriptivesBuilderClass:
 			self.df = self.df.drop([n[0],n[1],n[2],n[3],n[4],n[5],n[6],n[7]],axis=1)
 
 	def groupData(self):
-		f = {'id':['count'], 'diferencia_tiempo_secs':['mean']}
+		f = {'id':['count'], 'diferencia_tiempo_secs':[TemporalDescriptivesBuilderClass.specialMean]}
 		self.grouped_data = self.df.groupby( [ 'PERIODO', 'sitio_subida', 'servicio_subida'] ).agg(f)
 		columns = []
 		for col in self.grouped_data.columns.values:
@@ -141,3 +141,4 @@ class TemporalDescriptivesBuilderClass:
 
 		self.grouped_data.loc[:,'torniquete_mariposa'] = np.where(torniquetes_mariposa_conditions,1,0)
 		self.grouped_data.loc[:,'no_torniquete'] = np.where(no_torniquetes_conditions,1,0)
+		del self.grouped_data['UN_y']
