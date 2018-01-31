@@ -31,7 +31,6 @@ class TemporalDescriptivesBuilderClass:
 
 	def __init__(self,date):
 		self.analyzedDate = date
-		self.df = pd.DataFrame()
 		self.grouped_data = pd.DataFrame()		
 		self.df = pd.DataFrame()
 		self.etapas_builder = DailyEtapasBuilder.RunSilentlyDailyEtapasBuilderClass(self.analyzedDate)

@@ -8,7 +8,7 @@ busesTorniqueteDir = TransantiagoConstants.busesTorniqueteDir
 
 def readTurnstileData():
 	"""Reading turnstile data"""
-	ana_turnstiles_file = 'Torniquetes_Instalados_19.01.18.xlsx'
+	ana_turnstiles_file = 'Torniquetes Instalados_31.01.18.xlsx'
 	mauricio_turnstiles_file = 'Avance_Consolidado_v2.xlsx'
 
 	ana_turnstiles_path = os.path.join(busesTorniqueteDir, ana_turnstiles_file)
