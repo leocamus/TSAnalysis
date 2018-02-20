@@ -125,23 +125,16 @@ getLibraries(libs)
 
 
 
-#Reading files
-diccionario <- read.csv(file = "Diccionario.csv", header = TRUE, sep = ";", colClasses = c("character",
-                                                                                           "character",
-                                                                                           "character"))
-distancias <- read.csv(file = "distancias.csv", header = TRUE, sep = ";")
-
-
-
-
-#Working with: ########################### EVASION ##############################
+#Working with: ################################ EVASION ###################################
 #Description: Script para procesar RAW BBDD de Fiscalización. Output: evasion_edit (no es el consolidado).
 #Setting working space
 setwd("/Users/diego/Desktop/Evasion/01_analisis/03_datos/02_Fiscalizacion/01_Evasion (2017)/")
 
 #Reading files
 evasion <- read.csv(file = "evasion_2017.csv", header = TRUE, sep = ";")
-
+evasion$FECHA <- as.Date(evasion$FECHA)
+#Para 2016
+#evasion$TRI <- ifelse(evasion$FECHA <= "2016-03-31",1,ifelse(evasion$FECHA > "2016-03-31" & evasion$FECHA <= "2016-06-30",2,ifelse(evasion$FECHA > "2016-06-30" & evasion$FECHA <= "2016-09-30",3,4)))
 
 #Variable name
 names(evasion)[3] <- "Patente"
@@ -149,8 +142,14 @@ names(evasion)[3] <- "Patente"
 #Changing plate format
 evasion$Patente <- unlist(lapply(evasion$Patente, FUN = fill_patente))
 
+#Deleting white spaces and all to uppercase (just in case)
+evasion$FECHA <- gsub(" ","",evasion$FECHA)
+evasion$SERVICIO <- gsub(" ","",evasion$SERVICIO)
+evasion$Patente <- gsub(" ","",evasion$Patente)
+evasion$SERVICIO <- toupper(evasion$SERVICIO)
+evasion$Patente <- toupper(evasion$Patente)
+
 #Changing time format
-#evasion$HORA[which(evasion$HORA == "0,820833333")] <- "19"
 evasion$HORA <- as.integer(as.character(evasion$HORA))
 evasion$MINUTOS <- as.integer(as.character(evasion$MINUTOS))
 
@@ -159,19 +158,16 @@ evasion$HORA <- sprintf("%02d",evasion$HORA)
 evasion$MINUTOS <- sprintf("%02d",evasion$MINUTOS)
 
 evasion$Hora <- paste(evasion$HORA,":",evasion$MINUTOS, sep = "")
-evasion$FECHA <- as.Date(evasion$FECHA)
+
 
 #Reordering
 evasion <- evasion[,c(1,3,2,4,5,6,7,14,10,11,12,13)]
 
 
+write.table(evasion, file = "evasion_2017_edit.csv", row.names = FALSE, sep = ";")
 
-write.csv(evasion, file = "evasion_2017_edit.csv", row.names = FALSE)
 
-#We split the data into several dataframe by time, id, date and service
-#expediciones <- split(evasion, list(evasion$Date, evasion$Patente, evasion$SERVICIO, evasion$HORA.INICIO))
-
-#Working with: ########################### EVASION ##############################
+#Working with: ################################ EVASION ###################################
 
 
 
@@ -183,11 +179,11 @@ write.csv(evasion, file = "evasion_2017_edit.csv", row.names = FALSE)
 ### PARA AÑO 2017 ###
 
 #Setting working space
-setwd("/Users/diego/Desktop/Evasion/01_analisis/03_datos/02_Fiscalizacion/01_Evasion (2017)/")
+setwd("/Users/diego/Desktop/Evasion/01_analisis/03_datos/02_Fiscalizacion/02_Evasion (2016)/")
 
 #Reading files
 #Evasion
-evasion <- read.csv(file = "evasion_2017_edit.csv", header = TRUE, sep = ",")
+evasion <- read.csv(file = "evasion_2016_edit.csv", header = TRUE, sep = ";")
 evasion$FECHA <- as.Date(evasion$FECHA)
 
 #Setting working space
@@ -197,15 +193,21 @@ setwd("/Users/diego/Desktop/Evasion/01_analisis/03_datos/")
 torn_marip <- read.csv(file = "torniquetes_mariposa.csv", header = TRUE, sep = ";")
 torn_marip$X <- NULL
 names(torn_marip) <- c("UN","Patente","Fecha_mariposa")
+torn_marip$Patente <- gsub(" ","",torn_marip$Patente)
+torn_marip$Patente <- toupper(torn_marip$Patente)
+torn_marip$Fecha_mariposa <- gsub(" ","", torn_marip$Fecha_mariposa)
 torn_marip$Patente <- as.character(torn_marip$Patente)
 ind <- which(!grepl("-", torn_marip$Patente))
 torn_marip$Patente[ind] <- unlist(lapply(torn_marip$Patente[ind], FUN = fill_patente))
 torn_marip$Fecha_mariposa <- as.Date(torn_marip$Fecha_mariposa, format= "%Y-%m-%d")
 
+
 #Total torniquete
 torniquete <- read.csv(file = "torniquetes.csv", header = TRUE, sep = ";")
 torniquete <- torniquete[,1:2]
 torniquete$Instalacion <- as.Date(torniquete$Instalacion)
+torniquete$Patente <- gsub(" ","",torniquete$Patente)
+torniquete$Patente <- toupper(torniquete$Patente)
 
 #Deleting white spaces
 evasion$TP <- gsub(" ", "", evasion$TP)
@@ -232,7 +234,7 @@ dataframe <- dataframe[, list(DET = max(table(PUERTA.NUMERO)),
                               I.EP3 = sum(NO.VALIDAN[which(PUERTA.NUMERO == 3)]),
                               I.PP4 = sum(INGRESAN[which(PUERTA.NUMERO == 4)]) - sum(NO.VALIDAN[which(PUERTA.NUMERO == 4)]),
                               I.EP4 = sum(NO.VALIDAN[which(PUERTA.NUMERO == 4)]),
-                              TRI = unique(Trimestre)),
+                              TRI = unique(TRI)),
                        by= list(FECHA,Patente,SERVICIO,HORA.INICIO)]
 
 
@@ -259,7 +261,7 @@ dataframe$turnstile_marip[ind_na] <- ifelse(dataframe$FECHA[ind_na] > dataframe$
 dataframe$turnstile_marip[is.na(dataframe$turnstile_marip)] <- 0
 
 
-write.csv(dataframe, file = "evasion_2017_consolidado.csv", row.names = FALSE)
+write.table(dataframe, file = "evasion_2016_consolidado.csv", row.names = FALSE, sep = ";")
 
 #Working with: ############################ MERGE EVASION WITH TURNSTILE ###############################
 
@@ -304,22 +306,32 @@ lbs$Fecha <- as.Date(lbs$Fecha, format= "%d/%m/%Y")
 lbs$Distancia..m. <- as.numeric(gsub(",",".",lbs$Distancia..m.))
 lbs$Velocidad..Km.hr. <- as.numeric(gsub(",",".",lbs$Velocidad..Km.hr.))
 
+
+
 #Writing processed LBS
 #write.table(lbs, file = "processed_lbs_2017.csv", row.names = FALSE, sep = ";")
 
 #Setting working space
-setwd("/Users/diego/Desktop/Evasion/01_analisis/03_datos/02_Fiscalizacion/02_Evasion (2016)/")
+setwd("/Users/diego/Desktop/Evasion/01_analisis/03_datos/05_LBS/2017/")
+lbs <- read.csv(file = "processed_lbs_2017.csv", header = TRUE, sep = ";")
+lbs$Inicio <- times(as.character(lbs$Inicio))
+lbs$Fecha <- as.Date(lbs$Fecha)
+
+
+
+#Setting working space
+setwd("/Users/diego/Desktop/Evasion/01_analisis/03_datos/02_Fiscalizacion/01_Evasion (2017)/")
 
 #Reading files
-evasion <- read.csv(file = "evasion_2016_consolidado.csv", header = TRUE, sep = ",")
+evasion <- read.csv(file = "evasion_2017_consolidado.csv", header = TRUE, sep = ";")
 
 #Changing variables format
 evasion$HORA.INICIO <- times(paste(evasion$HORA.INICIO,":00",sep = ""))
 evasion$FECHA <- as.Date(evasion$FECHA)
 
 #Adding upperbound and lowerbound
-evasion$UpperBound <- evasion$HORA.INICIO + "00:08:00"
-evasion$LowerBound <- evasion$HORA.INICIO - "00:08:00"
+evasion$UpperBound <- evasion$HORA.INICIO + "00:10:00"
+evasion$LowerBound <- evasion$HORA.INICIO - "00:10:00"
 
 #Creating evasion ID
 evasion$ID <- paste(evasion$Patente, evasion$FECHA, evasion$HORA.INICIO, sep = "")
@@ -335,6 +347,9 @@ fiscalizacion <- sqldf('SELECT evasion.*, lbs.*
 fiscalizacion <- fiscalizacion[!is.na(fiscalizacion$TEXP),]
 nocurr <- data.frame(table(fiscalizacion$ID))
 nocurr <- nocurr[which(nocurr$Freq > 1),]
+
+#Para 2016
+#fiscalizacion <- fiscalizacion[-which(fiscalizacion$ID %in% nocurr$Var1),]
 
 
 #Reordering and saving database
@@ -356,10 +371,135 @@ fiscalizacion$turnstile <- 0
 names(fiscalizacion)[27] <- "n_turnstile"
 fiscalizacion$n_turnstile[ind_ntor] <- 1
 
-write.table(fiscalizacion, file = "BBDD_2016_consolidada.csv", row.names = FALSE, sep = ";")
+write.table(fiscalizacion, file = "BBDD_2017_consolidada.csv", row.names = FALSE, sep = ";")
 
 #Working with: ############################ MERGE BETWEEN EVASION AND LBS ###############################
   
+
+
+
+
+
+
+
+
+#Working with: ############################ MERGE BETWEEN BBDD CONSOLIDADA Y DATAVEL ###############################
+
+#Setting working space
+setwd("/Users/diego/Desktop/Evasion/01_analisis/03_datos/08_datavel/")
+datavel <- read.csv(file = "datavel_2017.csv", header = FALSE, sep = ";")
+datavel <- datavel[,-5]
+names(datavel) <- c("Patente","COD_SINRUTA","PosIni","PosFin")
+
+#Adding time and date variables
+datavel$PosIni <- as.POSIXct(datavel$PosIni, format= "%Y-%m-%d %H:%M:%S")
+datavel$PosFin <- as.POSIXct(datavel$PosFin, format= "%Y-%m-%d %H:%M:%S")
+
+datavel$Date <- as.Date(datavel$PosIni)    
+datavel$Inicio <- times(strftime(datavel$PosIni, format="%H:%M:%S"))
+datavel$PosIni <- NULL
+datavel$PosFin <- NULL
+datavel$Patente <- gsub(" ","",datavel$Patente)
+datavel$Patente <- toupper(datavel$Patente)
+datavel$Patente <- as.factor(datavel$Patente)
+
+
+#Setting working space
+setwd("/Users/diego/Desktop/Evasion/01_analisis/03_datos/07_Bases_consolidadas/")
+evasion <- read.csv(file = "BBDD_2017_consolidada.csv", header = TRUE, sep = ";")
+evasion$Fecha <- as.Date(evasion$Fecha)
+evasion$Ini_Fisca <- times(as.character(evasion$Ini_Fisca))
+
+#Adding upperbound and lowerbound
+evasion$UpperBound <- evasion$Ini_Fisca + "00:10:00"
+evasion$LowerBound <- evasion$Ini_Fisca - "00:10:00"
+
+#Creating evasion ID
+evasion$ID <- paste(evasion$Patente, evasion$Fecha, evasion$Ini_Fisca, sep = "")
+
+#Merge between fiscalizacion and DATAVEL
+dataframe <- sqldf('SELECT evasion.*, datavel.* 
+                       FROM evasion 
+                       LEFT JOIN datavel 
+                       ON datavel.Patente = evasion.Patente
+                       AND datavel.Date = evasion.FECHA
+                       AND datavel.Inicio BETWEEN evasion.LowerBound AND evasion.UpperBound')
+
+dataframe <- dataframe[!is.na(dataframe$COD_SINRUTA),]
+nocurr <- data.frame(table(dataframe$ID))
+nocurr <- nocurr[which(nocurr$Freq > 1),]
+
+#Para 2016
+dataframe <- dataframe[-which(dataframe$ID %in% nocurr$Var1),]
+
+
+write.table(dataframe, file = "BBDD_2017_consolidada_CODSIN.csv", row.names = FALSE, sep = ";")
+
+
+
+#Working with: ############################ MERGE BETWEEN BBDD CONSOLIDADA Y DATAVEL ###############################
+
+
+
+
+
+
+
+
+
+
+#Working with: ############################ ESTIMACION MODELO ###############################
+#Script description:  Script que toma la base de datos consolidadas y crea una dataframe con todas las variables
+#                     requeridas para la construcción del modelo econométrico. Además, se estiman diferentes modelos
+
+#Setting working space
+setwd("/Users/diego/Desktop/Evasion/01_analisis/03_datos/04_Intersections/")
+signals <- read.csv(file = "TrafficSignals.csv", header = TRUE, sep = ";")
+signals <- signals[,2:5]
+signals$YEAR <- as.factor(as.character(signals$YEAR))
+names(signals)[3] <- "TS_Sentido"
+
+#Setting working space
+setwd("/Users/diego/Desktop/Evasion/01_analisis/03_datos/07_Bases_consolidadas/")
+
+#Reading input files
+dataframe <- read.csv(file = "BBDD_modelotiempo.csv", header = TRUE, sep = ";")
+dataframe$TS_Sentido <- paste(dataframe$COD_TS,dataframe$Sentido,sep = "")
+dataframe$YEAR <- substr(dataframe$Fecha,1,4)
+
+dataframe$SEMESTER <- ""
+dataframe$SEMESTER[dataframe$TRI == 1 | dataframe$TRI == 2] <- 1
+dataframe$SEMESTER[!(dataframe$TRI == 1 | dataframe$TRI == 2)] <- 2
+dataframe$SEMESTER <- as.integer(dataframe$SEMESTER)
+
+#Getting number of traffic signals by semester
+dataframe <- join(dataframe, signals, by= c("YEAR","SEMESTER","TS_Sentido"))
+
+
+#Adding time period variables
+period <- as.data.frame(model.matrix(~dataframe$Periodo-1))
+names(period) <- sprintf("P%s",3:10)
+periodo_punta <- period$P4+period$P9
+
+#Adding route variable
+route <- as.data.frame(dataframe$TS_Sentido)
+route <- as.data.frame(model.matrix(~route[,1]-1))
+names(route) <- gsub("route\\[, 1\\]","",names(route))
+largo_r <- route*dataframe$L.m.
+
+
+#Bus demand with turnstile
+Y_P_turnstile <- dataframe$turnstile_marip * dataframe$I.P
+Y_P_turnstile_periodo <- dataframe$turnstile_marip * period * dataframe$I.P
+#Y_P_turnstile_periodo <- dataframe$turnstile_marip * periodo_punta * dataframe$I.P
+
+
+
+#Working with: ############################ ESTIMACION MODELO ###############################
+
+
+
+
 
 
 
