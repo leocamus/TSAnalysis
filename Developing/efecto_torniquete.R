@@ -459,6 +459,7 @@ base_fisca$ID <- paste(base_fisca$Fecha,base_fisca$Patente,base_fisca$Ini_Fisca,
 setwd("/Users/diego/Desktop/Evasion/01_analisis/03_datos/")
 
 diccionario <- read.csv(file = "diccionario_arena_tcad.csv", header = TRUE, sep = ";")
+diccionario$Manual[is.na(diccionario$Manual)] <- 0
 diccionario$Código.TCAD <- as.character(diccionario$Código.TCAD)
 diccionario$Código.Arena <- as.character(diccionario$Código.Arena)
 
@@ -485,6 +486,9 @@ missing <- data[is.na(data$Código.TCAD),]
 data <- data[!is.na(data$Código.TCAD),]
 duplicados <- data[duplicated(data$ID) | duplicated(data$ID, fromLast = TRUE),]
 
+#Writing dataset
+#write.table(data, file = "base_modelo.csv", row.names = FALSE, sep = ";")
+
 #Getting route names by date
 data$Fecha <- factor(data$Fecha, levels = unique(data$Fecha))
 expedicion <- split(data, data$Fecha)
@@ -497,8 +501,7 @@ route_day <- unlist(lapply(expedicion, function(dataframe){
 route_byday <- data.frame(route_day)
 route_byday$Date <- names(route_day)
 
-write.table(route_byday, file = "route_bydate.csv", row.names = FALSE, sep = ";")
-
+#write.table(route_byday, file = "route_bydate.csv", row.names = FALSE, sep = ";")
 
 #Working with: ################################ Getting Route name code ################################
 
@@ -514,24 +517,47 @@ write.table(route_byday, file = "route_bydate.csv", row.names = FALSE, sep = ";"
 #                     requeridas para la construcción del modelo econométrico. Además, se estiman diferentes modelos
 
 #Setting working space
-setwd("/Users/diego/Desktop/Evasion/01_analisis/03_datos/04_Intersections/")
-signals <- read.csv(file = "TrafficSignals.csv", header = TRUE, sep = ";")
-signals <- signals[,2:5]
-signals$YEAR <- as.factor(as.character(signals$YEAR))
-names(signals)[3] <- "TS_Sentido"
+setwd("/Users/diego/Desktop/Evasion/01_analisis/03_datos/04_NI/")
+signals <- read.csv(file = "NI.csv", header = TRUE, sep = ";")
+
+#Editing signals dataframe
+signals$ROUTE_NAME <- as.character(signals$ROUTE_NAME)
+signals$ROUTE_NAME <- gsub(" ","",signals$ROUTE_NAME)
+signals$ROUTE_NAME <- toupper(signals$ROUTE_NAME)
+signals$Desde <- as.Date(as.character(signals$Desde))
+signals$Hasta <- as.Date(as.character(signals$Hasta))
+signals <- signals[!duplicated(signals),]
+#duplicados_signal <- signals[duplicated(signals) | duplicated(signals, fromLast = TRUE),]
 
 #Setting working space
 setwd("/Users/diego/Desktop/Evasion/01_analisis/03_datos/07_Bases_consolidadas/")
 
 #Reading input files
-dataframe <- read.csv(file = "BBDD_modelotiempo.csv", header = TRUE, sep = ";")
-dataframe$TS_Sentido <- paste(dataframe$COD_TS,dataframe$Sentido,sep = "")
-dataframe$YEAR <- substr(dataframe$Fecha,1,4)
+dataframe <- read.csv(file = "base_modelo.csv", header = TRUE, sep = ";")
 
-dataframe$SEMESTER <- ""
-dataframe$SEMESTER[dataframe$TRI == 1 | dataframe$TRI == 2] <- 1
-dataframe$SEMESTER[!(dataframe$TRI == 1 | dataframe$TRI == 2)] <- 2
-dataframe$SEMESTER <- as.integer(dataframe$SEMESTER)
+#Editing expedition dataframe
+dataframe$Código.TCAD <- as.character(dataframe$Código.TCAD)
+dataframe$Código.TCAD <- gsub(" ","",dataframe$Código.TCAD)
+dataframe$Código.TCAD <- toupper(dataframe$Código.TCAD)
+dataframe$Fecha <- as.Date(as.character(dataframe$Fecha))
+names(dataframe)[33] <- "CodTCAD"
+
+#Merge between route and number of signals by date
+database <- sqldf('SELECT dataframe.*, signals.* 
+                  FROM dataframe 
+                  LEFT JOIN signals 
+                  ON dataframe.CodTCAD = signals.ROUTE_NAME
+                  AND dataframe.Fecha BETWEEN signals.Desde AND signals.Hasta')
+
+#Getting NAs
+ind_na <- is.na(database$NI)
+test_na <- database[ind_na,]
+
+
+#Getting duplicates
+database$ID <- as.character(database$ID)
+duplicados <- database[duplicated(database$ID) | duplicated(database$ID, fromLast = TRUE),]
+
 
 #Getting number of traffic signals by semester
 dataframe <- join(dataframe, signals, by= c("YEAR","SEMESTER","TS_Sentido"))
