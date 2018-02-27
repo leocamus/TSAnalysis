@@ -443,6 +443,67 @@ write.table(dataframe, file = "BBDD_2017_consolidada_CODSIN.csv", row.names = FA
 
 
 
+#Working with: ################################ Getting Route name code ################################
+
+#Setting working space
+setwd("/Users/diego/Desktop/Evasion/01_analisis/03_datos/07_Bases_consolidadas/")
+
+base_2016 <- read.csv(file = "BBDD_2016_consolidada_CODSIN.csv", header = TRUE, sep = ";")
+base_2017 <- read.csv(file = "BBDD_2017_consolidada_CODSIN.csv", header = TRUE, sep = ";")
+base_fisca <- rbind(base_2016,base_2017)
+rm(base_2016,base_2017)
+
+base_fisca$ID <- paste(base_fisca$Fecha,base_fisca$Patente,base_fisca$Ini_Fisca,sep = "")
+
+#Setting working space
+setwd("/Users/diego/Desktop/Evasion/01_analisis/03_datos/")
+
+diccionario <- read.csv(file = "diccionario_arena_tcad.csv", header = TRUE, sep = ";")
+diccionario$Código.TCAD <- as.character(diccionario$Código.TCAD)
+diccionario$Código.Arena <- as.character(diccionario$Código.Arena)
+
+#Deleting white spaces and all to upper
+diccionario$Código.TCAD <- gsub(" ","",diccionario$Código.TCAD)
+diccionario$Código.Arena <- gsub(" ","",diccionario$Código.Arena)
+diccionario$Código.TCAD <- toupper(diccionario$Código.TCAD)
+diccionario$Código.Arena <- toupper(diccionario$Código.Arena)
+base_fisca$COD_SINRUTA <- gsub(" ","",base_fisca$COD_SINRUTA)
+base_fisca$COD_SINRUTA <- toupper(base_fisca$COD_SINRUTA)
+
+#Merge between fiscalizacion database and dictionary 
+names(diccionario)[3] <- "COD_SINRUTA"
+ind_01 <- which(base_fisca$COD_SINRUTA == "T38701I")
+base_fisca$COD_SINRUTA[2622] <- "T38706I"
+ind_01 <- ind_01[-1]
+base_fisca$COD_SINRUTA[ind_01] <- "T38700I"
+
+#Merge
+data <- join(base_fisca,diccionario, by="COD_SINRUTA")
+
+#Missing values
+missing <- data[is.na(data$Código.TCAD),]
+data <- data[!is.na(data$Código.TCAD),]
+duplicados <- data[duplicated(data$ID) | duplicated(data$ID, fromLast = TRUE),]
+
+#Getting route names by date
+data$Fecha <- factor(data$Fecha, levels = unique(data$Fecha))
+expedicion <- split(data, data$Fecha)
+
+route_day <- unlist(lapply(expedicion, function(dataframe){
+  route <- unique(dataframe$Código.TCAD)
+  return(gsub(" ","",paste("'",route,"'", collapse = ",")))
+}))
+
+route_byday <- data.frame(route_day)
+route_byday$Date <- names(route_day)
+
+write.table(route_byday, file = "route_bydate.csv", row.names = FALSE, sep = ";")
+
+
+#Working with: ################################ Getting Route name code ################################
+
+
+
 
 
 
