@@ -1,0 +1,577 @@
+---
+title: "Turnstile Analysis"
+output: html_document
+
+---
+
+Este notebook se crea con el fin de mantener ordenado la investigación relacionada con el impacto que tiene el uso de torniquete mariposa en la operación de buses de Transantiago. En particular este script contiene el proceso de manejo de información de la base de datos de fiscalización (ya procesada), el análisis descriptivo de dicha base de datos y la construcción de modelos de tiempos medios de viaje.
+
+A continuación se crean funciones necesarias a lo largo del script (no se muestra código ni output asociado)
+```{r Functions, include=FALSE}
+
+
+##Function to load libraries and install packages, if necessary
+getLibraries <- function(libs) {
+  
+  for (lib in libs) {
+    if(!lib %in% rownames(installed.packages())){install.packages(lib, repos = "http://cran.us.r-project.org")}
+    library(as.character(lib), character.only = TRUE)
+  }
+}
+
+boxplot_total <- function(dataframe){
+  #Función que calcula boxplot para el total de datos seperando expediciones con y sin torniquete.
+    #Dataframe corresponde a las expediciones por servicio-periodo
+  
+  #Subsetting dataframe by turnstile usage
+  dataframe_st <- subset(dataframe, dataframe$turnstile == 0)
+  dataframe_ct <- subset(dataframe, dataframe$turnstile_marip == 1)
+  
+  if(nrow(dataframe_st) > 0 & nrow(dataframe_ct) > 0){
+    
+    #Combining two datasets
+    dataset <- rbind(dataframe_ct,dataframe_st)
+    dataset$categoria <- c(rep("C/T", nrow(dataframe_ct)),rep("S/T",nrow(dataframe_st)))
+    
+    pdf(file = paste(unique(dataframe$ServicioSentido),"-",unique(dataframe$PeriodoTSExpedicion), ".pdf", sep = ""), 10,5)
+    
+    #Boxplots
+    b1 <- ggplot(data = dataframe_ct, aes(x= "", y= texpedicion)) + 
+      geom_boxplot() +
+      xlab("") +
+      stat_summary(fun.y = mean, colour= "green", geom="point", 
+                   shape=18, size=3) +
+      ylab("TExpedicion (min)") +
+      coord_cartesian(ylim = c(min(dataframe_ct$texpedicion,dataframe_st$texpedicion), max(dataframe_ct$texpedicion,dataframe_st$texpedicion))) +
+      ggtitle("With turnstile")
+    
+    b2 <- ggplot(data = dataframe_st, aes(x= "", y= texpedicion)) + 
+      geom_boxplot() +
+      xlab("") +
+      ylab("TExpedicion (min)") +
+      stat_summary(fun.y = mean, colour= "green", geom="point", 
+                   shape=18, size=3) +
+      coord_cartesian(ylim = c(min(dataframe_ct$texpedicion,dataframe_st$texpedicion), max(dataframe_ct$texpedicion,dataframe_st$texpedicion))) +
+      ggtitle("Without turnstile")
+    
+    p1 <- ggplot(data=dataset, aes(x=1:nrow(dataset), y=dataset$texpedicion, col=categoria)) + 
+      geom_point() +
+      xlab("Obs.") +
+      ylab("TExpedicion (min)") +
+      theme(legend.title = element_blank(),
+            axis.text.x = element_blank(),
+            legend.position="top",
+            legend.margin=margin(0,0,0,0),
+            legend.box.margin=margin(-10,-10,-10,-10)) +
+      coord_cartesian(ylim = c(min(dataframe_ct$texpedicion,dataframe_st$texpedicion), max(dataframe_ct$texpedicion,dataframe_st$texpedicion))) +
+      ggtitle("Dataset")
+    
+    
+    #Plotting
+    grid.arrange(b1, b2, p1, ncol = 3, nrow = 1, widths=c(1,1,2.5), top= paste(unique(dataframe$ServicioSentido),"-",unique(dataframe$PeriodoTSExpedicion), sep = ""))
+    
+    dev.off()
+    
+  }
+}
+
+boxplot_dia <- function(dataframe){
+  #Función que calcula boxplot por cada día de una semana.
+    #Input corresponde a un dataframe con expediciones con y sin torniquete de toda la semana.
+  
+  #Subsetting dataframe by turnstile usage
+  dataframe_st <- subset(dataframe, dataframe$turnstile == 0)
+  dataframe_ct <- subset(dataframe, dataframe$turnstile_marip == 1)
+  
+  
+  #Creating boxplot per day
+  if(length(unique(dataframe_ct$wday)) == 5 & length(unique(dataframe_st$wday)) == 5){
+    
+    pdf(file = paste("BOX_SEMANA - ",unique(dataframe$ServicioSentido),"-",unique(dataframe$PeriodoTSExpedicion), ".pdf", sep = ""), 10,5)
+    
+    #Boxplots
+    b1 <- ggplot(data = dataframe_ct, aes(x= weekday, y= texpedicion)) + 
+      geom_boxplot(aes(fill=weekday)) +
+      xlab("") +
+      ylab("TExpedicion (min)") +
+      theme(legend.position="none") +
+      coord_cartesian(ylim = c(min(dataframe_ct$texpedicion,dataframe_st$texpedicion), max(dataframe_ct$texpedicion,dataframe_st$texpedicion))) +
+      ggtitle("With turnstile")
+    
+    b2 <- ggplot(data = dataframe_st, aes(x= weekday, y= texpedicion)) + 
+      geom_boxplot(aes(fill=weekday)) +
+      xlab("") +
+      ylab("TExpedicion (min)") +
+      coord_cartesian(ylim = c(min(dataframe_ct$texpedicion,dataframe_st$texpedicion), max(dataframe_ct$texpedicion,dataframe_st$texpedicion))) +
+      ggtitle("Without turnstile")
+    
+    
+    #Plotting
+    grid.arrange(b1, b2, ncol = 2, nrow = 1, widths=c(1,1.3), top= paste(unique(dataframe$ServicioSentido),"-",unique(dataframe$PeriodoTSExpedicion), sep = ""))
+    
+    
+    dev.off()
+    
+  }
+}
+
+fill_patente <- function(placa){
+  return(paste(unlist(strsplit(as.character(placa), "(?=[A-Za-z])(?<=[0-9])|(?=[0-9])(?<=[A-Za-z])", perl=TRUE)), collapse = "-"))
+  }
+
+cbind.all <- function (...){
+  nm <- list(...)
+  nm <- lapply(nm, as.matrix)
+  n <- max(sapply(nm, nrow))
+  do.call(cbind, lapply(nm, function(x) rbind(x, matrix(, n - 
+                                                          nrow(x), ncol(x)))))
+}
+
+
+libs <- c("data.table",
+          "plyr",
+          "lubridate",
+          "chron",
+          "ggplot2",
+          "ggpubr",
+          "gridExtra",
+          "stringr",
+          "fuzzyjoin",
+          "sqldf",
+          "plotly",
+          "shiny")
+
+getLibraries(libs)
+```
+
+Getting and editing signals dataframe
+```{r Signals}
+
+#Options
+options(max.print=10000)
+
+#Setting working space
+setwd("/Users/diego/Desktop/Evasion/01_analisis/03_datos/04_NI/")
+signals <- read.csv(file = "NI.csv", header = TRUE, sep = ";")
+
+#Editing signals dataframe
+signals$ROUTE_NAME <- as.character(signals$ROUTE_NAME)
+signals$ROUTE_NAME <- gsub(" ","",signals$ROUTE_NAME)
+signals$ROUTE_NAME <- toupper(signals$ROUTE_NAME)
+signals$Desde <- as.Date(as.character(signals$Desde))
+signals$Hasta <- as.Date(as.character(signals$Hasta))
+signals <- signals[!duplicated(signals),]
+#duplicados_signal <- signals[duplicated(signals) | duplicated(signals, fromLast = TRUE),]
+
+
+```
+
+
+Getting and editing variables dataframe
+```{r Expedition times}
+#Setting working space
+setwd("/Users/diego/Desktop/Evasion/01_analisis/03_datos/07_Bases_consolidadas/")
+
+#Reading input files
+dataframe <- read.csv(file = "base_modelo.csv", header = TRUE, sep = ";")
+
+#Editing expedition dataframe
+dataframe$Código.TCAD <- as.character(dataframe$Código.TCAD)
+dataframe$Código.TCAD <- gsub(" ","",dataframe$Código.TCAD)
+dataframe$Código.TCAD <- toupper(dataframe$Código.TCAD)
+dataframe$Fecha <- as.Date(as.character(dataframe$Fecha))
+names(dataframe)[33] <- "CodTCAD"
+
+#Merge between route and number of signals by date
+database <- sqldf('SELECT dataframe.*, signals.* 
+                  FROM dataframe 
+                  LEFT JOIN signals 
+                  ON dataframe.CodTCAD = signals.ROUTE_NAME
+                  AND dataframe.Fecha BETWEEN signals.Desde AND signals.Hasta')
+
+#Getting NAs
+ind_na <- which(is.na(database$NI))
+test_na <- database[ind_na,]
+
+#Deleting NAs
+database <- database[-ind_na,]
+
+```
+
+
+# Data Analysis
+Análisis de variables
+```{r}
+
+texp_s <- database$TEXP
+demanda_total <- database$Y
+detenciones <- database$DET
+largo_m <- database$L.m.
+evasion_total <- database$EV
+NI <- database$NI
+
+variables <- data.frame(texp_s,largo_m,demanda_total,evasion_total,detenciones, NI)
+
+summary(variables)
+```
+
+Número de expediciones sin torniquete:
+```{r echo=FALSE}
+sum(database$n_turnstile)
+```
+
+Número de expediciones con torniquete mariposa:
+```{r echo=FALSE}
+sum(database$turnstile_marip)
+```
+
+Número de expediciones con torniquete de tres brazos:
+```{r echo=FALSE}
+length(which(database$n_turnstile==0 & database$turnstile_marip==0))
+```
+
+
+Histograma tiempos de expedicion:
+
+```{r Histograms, echo=FALSE, plotly=TRUE}
+#histogram for expedition time by turnstile usage
+texpedicion <- data.frame(database$TEXP)
+names(texpedicion) <- "texp"
+
+#Making plot
+
+ggplot(texpedicion, aes(texpedicion$texp)) +
+  geom_histogram(bins=40) +
+  theme_bw() +
+  theme(panel.border = element_blank()) +
+  labs(x= "Tiempo de expedición (s)", y= "Frecuencia")
+
+# #Making interactive plot
+# inputPanel(
+#   selectInput("n_breaks", label = "Number of bins:", choices = seq(10,100,10), selected = 30)
+# 
+#   #sliderInput("bw_adjust", label = "Bandwidth adjustment:", min = 0.2, max = 2, value = 1, step = 0.2)
+# )
+# 
+# renderPlot({
+#   ggplot(texpedicion, aes(texpedicion$texp)) +
+#   geom_histogram(bins= as.numeric(input$n_breaks)) +
+#   theme_bw() +
+#   theme(panel.border = element_blank())
+# })
+
+
+#Interactive plot
+# p <- ggplot(texpedicion, aes(texpedicion$texp)) +
+#   geom_histogram(bins=40) +
+#   theme_bw() +
+#   theme(panel.border = element_blank())
+# 
+# ggplotly(p)
+# p <- ggplotly(p)
+# 
+# # Create a shareable link to your chart
+# # Set up API credentials: https://plot.ly/r/getting-started
+# htmlwidgets::saveWidget(as_widget(p), "histograma_texp.html")
+```
+
+Histograma y boxplot del largos de los recorridos:
+
+```{r Histograma Recorridos, echo=FALSE}
+#histogram for expedition time by turnstile usage
+lrecorridos <- data.frame(database$L.m.)
+names(lrecorridos) <- "l_recorridos"
+
+#Making plot
+
+ggplot(lrecorridos, aes(lrecorridos$l_recorridos)) +
+  geom_histogram(bins=40) +
+  theme_bw() +
+  theme(panel.border = element_blank()) +
+  labs(x= "Largo de los recorridos (m)", y= "Frecuencia")
+
+
+ggplot(lrecorridos, aes(x="", y=lrecorridos$l_recorridos)) +
+  geom_boxplot() +
+  labs(x= "", y= "Largo del recorrido (m)")
+
+#Boxplot stats
+#a vector of length 5, containing the extreme of the lower whisker, the lower ‘hinge’, the median, the upper ‘hinge’ and the extreme of the upper whisker.
+boxplot.stats(lrecorridos$l_recorridos)
+
+```
+
+
+
+# Travel time models
+A continuación se crean modelos econométricos para estimar el tiempo medio de viaje controlando por el efecto de distintas variabless, como el uso de torniquete mariposa. 
+
+## Modelo 1
+
+El primer modelo es un modelo simple que incluye el largo del recorrido, el número de detenciones, la demanda total, y el número de intersecciones.
+
+```{r Modelo1, echo=FALSE}
+
+data.all <- data.frame(database$TEXP, database$L.m., database$DET, database$Y, database$NI)
+names(data.all) <- c("texp","largo","detenciones","Y","NI")
+modelo_01 <- lm(as.formula("texp~."), data = data.all)
+summary(modelo_01)
+```
+
+## Modelo 2
+
+El segundo modelo corresponde a una extensión del primero, pero considerando una dummy para el número de intersecciones semaforizadas que sea uno en el caso que la expedición se haga en un periodo punta (punta mañana o tarde). Dando cuenta de la programación más favorable que se puede encontrar en dichos periodos o también de congestión por sobresaturación en algunos casos.
+
+```{r Modelo2, echo=FALSE}
+#Adding time period variables
+period <- as.data.frame(model.matrix(~database$Periodo-1))
+names(period) <- sprintf("P%s",3:10)
+periodo_punta <- period$P4+period$P9
+
+#Signals by period
+NI_peak <- periodo_punta * database$NI
+
+data.all <- data.frame(database$TEXP, database$L.m., database$DET, database$Y, database$NI, NI_peak)
+names(data.all) <- c("texp","largo","detenciones","Y","NI", "NI_peak")
+modelo_02 <- lm(as.formula("texp~."), data = data.all)
+summary(modelo_02)
+```
+
+## Modelo 3
+En el siguiente modelo agrega una variable dummy por la demanda total de la expedición. Esta variable será uno en el caso que el viaje se haga en un periodo punta (punta mañana o punta tarde)
+
+```{r Modelo3, echo=FALSE}
+
+#Computing demand during peak periods
+Y_peak <- database$Y * periodo_punta
+
+#Dataframe
+data.all <- data.frame(database$TEXP, database$L.m., database$DET, database$Y,Y_peak, database$NI, NI_peak)
+names(data.all) <- c("texp","largo","detenciones","Y","Y_Peak", "NI", "NI_peak")
+
+modelo_03 <- lm(as.formula("texp~."), data = data.all)
+summary(modelo_03)
+```
+
+
+## Modelo 4
+En el siguiente modelo se saca la componente extra de demora por intersecciones semaforizadas y se agrega una variable de demanda total en presencia de torniquete mariposa y de tres brazos.
+
+```{r Modelo4, echo=FALSE}
+#Adding 3B turnstile variable
+database$turnstile_3b <- 0
+ind_3b <- which(database$n_turnstile==0 & database$turnstile_marip == 0)
+database$turnstile_3b[ind_3b] <- 1
+
+#Adding turnstile variable during peak periods
+Y_mar <- database$Y * database$turnstile_marip
+Y_3b <- database$Y * database$turnstile_3b
+
+#Dataframe
+data.all <- data.frame(database$TEXP, database$L.m., database$DET, database$Y,Y_peak, Y_mar,Y_3b, database$NI)
+names(data.all) <- c("texp","largo","detenciones","Y","Y_Peak","Y_Marip","Y_3b", "NI")
+
+modelo_04 <- lm(as.formula("texp~."), data = data.all)
+summary(modelo_04)
+```
+
+
+## Modelo 5
+En el siguiente modelo se agrega demanda en presencia de torniquetes de tres brazos y mariposa en periodos punta, eliminando demanda en presencia de torniquete.
+
+```{r Modelo5, echo=FALSE}
+
+#Adding turnstile variable during peak periods
+Y_peak_mar <- Y_peak * database$turnstile_marip
+Y_peak_3b <- Y_peak * database$turnstile_3b
+
+#Dataframe
+data.all <- data.frame(database$TEXP, database$L.m., database$DET, database$Y, Y_peak, Y_peak_mar,Y_peak_3b, database$NI)
+names(data.all) <- c("texp","largo","detenciones","Y","Y_Peak","Y_Peak_Marip","Y_Peak_3b", "NI")
+
+modelo_05 <- lm(as.formula("texp~."), data = data.all)
+summary(modelo_05)
+```
+
+## Modelo 6
+El modelo 6 es idéntico al modelo anterior salvo que se agrega una componente extra en el número de intersecciones para aquellas expediciones que se hacen en periodos más demandados.
+
+```{r Modelo6, echo=FALSE}
+#Dataframe
+data.all <- data.frame(database$TEXP, database$L.m., database$DET, database$Y, Y_peak, Y_peak_mar,Y_peak_3b, database$NI, NI_peak)
+names(data.all) <- c("texp","largo","detenciones","Y","Y_Peak","Y_Peak_Marip","Y_Peak_3b", "NI","NI_peak")
+
+modelo_06 <- lm(as.formula("texp~."), data = data.all)
+summary(modelo_06)
+```
+
+## Modelo 7
+Este modelo es una extensión del modelo anterior, salvo que la demanda total se desagrega por aquella que se hace en paraderos normal y por aquellas realizadas en zonas pagas.
+
+```{r Modelo7, echo=FALSE}
+#Dataframe
+data.all <- data.frame(database$TEXP, database$L.m., database$DET, database$I.P, database$I.ZP,Y_peak, Y_peak_mar,Y_peak_3b, database$NI, NI_peak)
+names(data.all) <- c("texp","largo","detenciones","Y_P","Y_ZP","Y_Peak","Y_Peak_Marip","Y_Peak_3b", "NI","NI_peak")
+
+modelo_07 <- lm(as.formula("texp~."), data = data.all)
+summary(modelo_07)
+```
+
+## Modelo 8
+A continuación se prueba con una nueva especificación del modelo, debido al valor negativo que tiene el coeficiente asociado a la utilización de un torniquete de tres brazos. Para esto la demanda se desagrega en paradero normal y zona paga, y el primero a su vez se desagrega en: tiempo base, tiempo extra por utilización de torniquete de tres brazos, tiempo extra por utilización de torniquete mariposa y tiempo extra por utilización de torniquete mariposa en periodo punta, $i.e.$:
+
+$T = c + t_{L} \cdot L + t_{s}\cdot S + ( t_{Y_{P}} + t_{Y_{P}}^{'} \cdot \tau_{3B} + (t_{Y_{P}}^{''} + t_{Y_{P}}^{'''} \cdot \tau_{peak}) \tau_{M}) \cdot Y_{P} + t_{ZP} \cdot Y_{ZP} + N^{I} + N_{peak}^{I}$
+
+```{r Modelo8, echo=FALSE}
+
+#Computing demand variables
+Y_P_mar <- database$I.P * database$turnstile_marip
+Y_P_3b <- database$I.P * database$turnstile_3b
+
+Y_P_mar_peak <- database$I.P * periodo_punta * database$turnstile_marip
+
+#Dataframe
+data.all <- data.frame(database$TEXP, database$L.m., database$DET, database$I.P, Y_P_mar, Y_P_3b, Y_P_mar_peak, database$I.ZP, database$NI, NI_peak)
+names(data.all) <- c("texp","largo","detenciones","Y_P","Y_P_marip","Y_P_3b","Y_P_marip_peak","Y_ZP", "NI","NI_peak")
+
+modelo_08 <- lm(as.formula("texp~."), data = data.all)
+summary(modelo_08)
+```
+
+## Modelo 9
+Modelo 8 pero sin considerar desagregación de la demanda en paraderos normales y zonas pagas, $i.e.$: 
+
+$T = c + t_{L} \cdot L + t_{s}\cdot S + ( t_{Y} + t_{Y}^{'} \cdot \tau_{3B} + (t_{Y}^{''} + t_{Y}^{'''} \cdot \tau_{peak}) \tau_{M}) \cdot Y + N^{I} + N_{peak}^{I}$
+
+```{r Modelo 9, echo=FALSE}
+#Computing demand variables
+Y_mar <- database$Y * database$turnstile_marip
+Y_3b <- database$Y * database$turnstile_3b
+
+Y_mar_peak <- database$Y * periodo_punta * database$turnstile_marip
+
+#Dataframe
+data.all <- data.frame(database$TEXP, database$L.m., database$DET, database$Y, Y_mar, Y_3b, Y_mar_peak, database$NI, NI_peak)
+names(data.all) <- c("texp","largo","detenciones","Y","Y_marip","Y_3b","Y_marip_peak", "NI","NI_peak")
+
+modelo_09 <- lm(as.formula("texp~."), data = data.all)
+summary(modelo_09)
+```
+
+## Modelo 10
+Modelo 10 tiene la misma especificación del Modelo 9, sin embargo solo se considera la demanda de la puerta 1, asumiendo que solo es ahí donde existe el efecto por el uso de torniquete. $i.e.$:
+
+$T = c + t_{L} \cdot L + t_{s}\cdot S + \Big( t_{Y_{P_{1}}} + t_{Y_{P_{1}}}^{'} \cdot \tau_{3B} + (t_{Y_{P_{1}}}^{''} + t_{Y_{P_{1}}}^{'''} \cdot \tau_{peak}) \tau_{M} \Big) \cdot Y_{P_{1}} + N^{I} + N_{peak}^{I}$
+
+```{r Modelo10, echo=FALSE}
+
+#Ingresos por puerta 1
+Y_P1 <- database$I.PP1 + database$I.EP1
+Y_P1_3b <- Y_P1 * database$turnstile_3b
+Y_P1_marip <- Y_P1 * database$turnstile_marip
+Y_P1_marip_peak <- Y_P1 * database$turnstile_marip * periodo_punta
+
+
+#Dataframe
+data.all <- data.frame(database$TEXP, database$L.m., database$DET, Y_P1, Y_P1_3b, Y_P1_marip, Y_P1_marip_peak, database$NI, NI_peak)
+names(data.all) <- c("texp","largo","detenciones","Y_P1","Y_P1_3B","Y_P1_Marip","Y_P1_Marip_peak", "NI","NI_peak")
+
+modelo_10 <- lm(as.formula("texp~."), data = data.all)
+summary(modelo_10)
+
+```
+
+## Modelo 11
+```{r Modelo11, echo=FALSE}
+
+#Dataframe
+data.all <- data.frame(database$TEXP, database$L.m., database$DET, database$Y,Y_peak, Y_mar,Y_mar_peak, database$NI, NI_peak)
+names(data.all) <- c("texp","largo","detenciones","Y","Y_Peak","Y_Marip","Y_Marip_peak", "NI","NI_peak")
+
+modelo_11 <- lm(as.formula("texp~."), data = data.all)
+summary(modelo_11)
+```
+
+## Modelo 12
+
+Modelo 11, pero eliminando aquellas observaciones realizadas por buses con torniquete de tres brazos.
+
+```{r Modelo12, echo=FALSE}
+
+#Dataframe
+data.all <- data.frame(database$TEXP, database$L.m., database$DET, database$Y,Y_peak, Y_mar, database$NI, NI_peak)
+names(data.all) <- c("texp","largo","detenciones","Y","Y_Peak","Y_Marip", "NI","NI_peak")
+
+data.all <- data.all[-ind_3b,]
+
+modelo_12 <- lm(as.formula("texp~."), data = data.all)
+summary(modelo_12)
+```
+
+#Modelo 13
+
+Corresponde al modelo 12 (eliminando observaciones que se hacen en expediciones de tres brazos) pero controlando por el largo de la ruta. Para esto se usan los largos de los recorridos que determinan los quintiles según boxplot.stats y se asume el último quintil como caso base.
+
+```{r Modelo13, echo=FALSE}
+
+#Dataframe
+data.all <- data.frame(database$TEXP, database$L.m., database$DET, database$Y,Y_peak, Y_mar, database$NI, NI_peak)
+names(data.all) <- c("texp","largo","detenciones","Y","Y_Peak","Y_Marip", "NI","NI_peak")
+
+data.all <- data.all[-ind_3b,]
+
+#Boxplot stats
+stat <- boxplot.stats(data.all$largo)[[1]]
+
+#Indexes
+ind_l1 <- which(data.all$largo <= stat[2])
+ind_l2 <- which(data.all$largo > stat[2] & data.all$largo <= stat[3])
+ind_l3 <- which(data.all$largo > stat[3] & data.all$largo <= stat[4])
+ind_l4 <- which(data.all$largo > stat[4] & data.all$largo <= stat[5])
+ind_l5 <- which(data.all$largo > stat[5])
+
+#Computing extra time by large of the route (Using L5 as base case)
+data.all$L1 <- 0
+data.all$L1[ind_l1] <- data.all$largo[ind_l1]
+
+data.all$L2 <- 0
+data.all$L2[ind_l2] <- data.all$largo[ind_l2]
+
+data.all$L3 <- 0
+data.all$L3[ind_l3] <- data.all$largo[ind_l3]
+
+data.all$L4 <- 0
+data.all$L4[ind_l4] <- data.all$largo[ind_l4]
+
+
+
+modelo_13 <- lm(as.formula("texp~."), data = data.all)
+summary(modelo_13)
+```
+
+## Modelo 14
+Modelo 12, asumiendo un tiempo extra por tipo de ruta solo para aquellas muy largas (L5).
+
+```{r Modelo14, echo=FALSE}
+#Dataframe
+data.all <- data.frame(database$TEXP, database$L.m., database$DET, database$Y,Y_peak, Y_mar, database$NI, NI_peak)
+names(data.all) <- c("texp","L","detenciones","Y","Y_Peak","Y_Marip", "NI","NI_peak")
+
+data.all <- data.all[-ind_3b,]
+
+#Boxplot stats
+stat <- boxplot.stats(data.all$L)[[1]]
+
+#Indexes
+ind_lextra <- which(data.all$L > stat[4])
+
+
+#Computing extra time by large of the route
+data.all$L_extra <- 0
+data.all$L_extra[ind_lextra] <- data.all$L[ind_lextra]
+
+
+modelo_14 <- lm(as.formula("texp~."), data = data.all)
+summary(modelo_14)
+```
+

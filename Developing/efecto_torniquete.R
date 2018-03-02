@@ -109,6 +109,14 @@ fill_patente <- function(placa){
   return(paste(unlist(strsplit(as.character(placa), "(?=[A-Za-z])(?<=[0-9])|(?=[0-9])(?<=[A-Za-z])", perl=TRUE)), collapse = "-"))
   }
 
+cbind.all <- function (...){
+  nm <- list(...)
+  nm <- lapply(nm, as.matrix)
+  n <- max(sapply(nm, nrow))
+  do.call(cbind, lapply(nm, function(x) rbind(x, matrix(, n - 
+                                                          nrow(x), ncol(x)))))
+}
+
 
 libs <- c("data.table",
           "plyr",
@@ -119,7 +127,8 @@ libs <- c("data.table",
           "gridExtra",
           "stringr",
           "fuzzyjoin",
-          "sqldf")
+          "sqldf",
+          "plotly")
 
 getLibraries(libs)
 
@@ -519,6 +528,7 @@ route_byday$Date <- names(route_day)
 #Setting working space
 setwd("/Users/diego/Desktop/Evasion/01_analisis/03_datos/04_NI/")
 signals <- read.csv(file = "NI.csv", header = TRUE, sep = ";")
+options(max.print=10000)
 
 #Editing signals dataframe
 signals$ROUTE_NAME <- as.character(signals$ROUTE_NAME)
@@ -550,37 +560,61 @@ database <- sqldf('SELECT dataframe.*, signals.*
                   AND dataframe.Fecha BETWEEN signals.Desde AND signals.Hasta')
 
 #Getting NAs
-ind_na <- is.na(database$NI)
+ind_na <- which(is.na(database$NI))
 test_na <- database[ind_na,]
 
-
-#Getting duplicates
-database$ID <- as.character(database$ID)
-duplicados <- database[duplicated(database$ID) | duplicated(database$ID, fromLast = TRUE),]
-
-
-#Getting number of traffic signals by semester
-dataframe <- join(dataframe, signals, by= c("YEAR","SEMESTER","TS_Sentido"))
+#Deleting NAs
+database <- database[-ind_na,]
 
 
 #Adding time period variables
-period <- as.data.frame(model.matrix(~dataframe$Periodo-1))
+period <- as.data.frame(model.matrix(~database$Periodo-1))
 names(period) <- sprintf("P%s",3:10)
 periodo_punta <- period$P4+period$P9
 
-#Adding route variable
-route <- as.data.frame(dataframe$TS_Sentido)
+#Adding route variable (by CODSINRUTA)
+route <- as.data.frame(database$COD_SINRUTA)
 route <- as.data.frame(model.matrix(~route[,1]-1))
 names(route) <- gsub("route\\[, 1\\]","",names(route))
-largo_r <- route*dataframe$L.m.
+largo_r <- route*database$L.m.
+names(largo_r) <- paste(names(largo_r),"_L",sep = "")
 
 
 #Bus demand with turnstile
-Y_P_turnstile <- dataframe$turnstile_marip * dataframe$I.P
-Y_P_turnstile_periodo <- dataframe$turnstile_marip * period * dataframe$I.P
-#Y_P_turnstile_periodo <- dataframe$turnstile_marip * periodo_punta * dataframe$I.P
+Y_P_turnstile <- database$turnstile_marip * database$I.P
+
+#Demand in normal bus stop using turnstile
+Y_P_turnstile_periodo <- database$turnstile_marip * period * database$I.P
+#Y_P_turnstile_periodo <- database$turnstile_marip * periodo_punta * database$I.P
+names(Y_P_turnstile_periodo) <- paste("Y_P_",names(Y_P_turnstile_periodo),sep = "")
+
+#Number of signals by route and period
+ncol_r <- ncol(route)
+NI_period <- data.frame()
+for (j in 1:ncol_r) {
+
+  x.data <- route[,j]*period
+  names(x.data) <- sprintf("%s_%s",names(route)[j],names(period))
+  NI_period <- data.frame(cbind.all(NI_period,x.data))
+  
+}
+
+NI_period <- database$NI * NI_period
+names(NI_period) <- paste("NI_",names(NI_period),sep = "")
 
 
+
+data.all <- data.frame(database$TEXP,
+                       database$L.m.,
+                       database$DET,
+                       database$Y,
+                       database$NI,
+                       database$turnstile_marip)
+
+names(data.all)[1] <- "texp"
+
+#Linear regression
+OLS <- lm(as.formula("texp~."), data = data.all)
 
 #Working with: ############################ ESTIMACION MODELO ###############################
 
