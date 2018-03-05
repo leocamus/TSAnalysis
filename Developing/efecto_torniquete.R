@@ -185,14 +185,14 @@ write.table(evasion, file = "evasion_2017_edit.csv", row.names = FALSE, sep = ";
 #Working with: ############################ MERGE EVASION WITH TURNSTILE ###############################
 #Script description:  Script para procesar datos de fiscalización editados, consolidarlos por expedición y determinar
 #                     número de expediciones con y sin torniquete. Output: evasion_consolidado
-### PARA AÑO 2017 ###
+### PARA AÑO 2016 ###
 
 #Setting working space
-setwd("/Users/diego/Desktop/Evasion/01_analisis/03_datos/02_Fiscalizacion/02_Evasion (2016)/")
+setwd("/Users/diego/Desktop/Evasion/01_analisis/03_datos/02_Fiscalizacion/01_Evasion (2017)/")
 
 #Reading files
 #Evasion
-evasion <- read.csv(file = "evasion_2016_edit.csv", header = TRUE, sep = ";")
+evasion <- read.csv(file = "evasion_2017_edit.csv", header = TRUE, sep = ";")
 evasion$FECHA <- as.Date(evasion$FECHA)
 
 #Setting working space
@@ -233,16 +233,28 @@ dataframe <- data.table(evasion)
 dataframe <- dataframe[, list(DET = max(table(PUERTA.NUMERO)),
                               Y = sum(INGRESAN),
                               EV = sum(NO.VALIDAN),
-                              I.P = sum(INGRESAN[which(TP == "P")]),
+                              I.PN = sum(INGRESAN[which(TP == "P")]),
                               I.ZP = sum(INGRESAN[which(TP == "Z")]),
-                              I.PP1 = sum(INGRESAN[which(PUERTA.NUMERO == 1)]) - sum(NO.VALIDAN[which(PUERTA.NUMERO == 1)]),
-                              I.EP1 = sum(NO.VALIDAN[which(PUERTA.NUMERO == 1)]),
-                              I.PP2 = sum(INGRESAN[which(PUERTA.NUMERO == 2)]) - sum(NO.VALIDAN[which(PUERTA.NUMERO == 2)]),
-                              I.EP2 = sum(NO.VALIDAN[which(PUERTA.NUMERO == 2)]),
-                              I.PP3 = sum(INGRESAN[which(PUERTA.NUMERO == 3)]) - sum(NO.VALIDAN[which(PUERTA.NUMERO == 3)]),
-                              I.EP3 = sum(NO.VALIDAN[which(PUERTA.NUMERO == 3)]),
-                              I.PP4 = sum(INGRESAN[which(PUERTA.NUMERO == 4)]) - sum(NO.VALIDAN[which(PUERTA.NUMERO == 4)]),
-                              I.EP4 = sum(NO.VALIDAN[which(PUERTA.NUMERO == 4)]),
+                              I.P1 = sum(INGRESAN[which(PUERTA.NUMERO == 1)]),
+                              I.P2 = sum(INGRESAN[which(PUERTA.NUMERO == 2)]),
+                              I.P3 = sum(INGRESAN[which(PUERTA.NUMERO == 3)]),
+                              I.P4 = sum(INGRESAN[which(PUERTA.NUMERO == 4)]),
+                              I.PN.P1 = sum(INGRESAN[which(TP == "P" & PUERTA.NUMERO == 1)]),
+                              I.PN.P2 = sum(INGRESAN[which(TP == "P" & PUERTA.NUMERO == 2)]),
+                              I.PN.P3 = sum(INGRESAN[which(TP == "P" & PUERTA.NUMERO == 3)]),
+                              I.PN.P4 = sum(INGRESAN[which(TP == "P" & PUERTA.NUMERO == 4)]),
+                              I.ZP.P1 = sum(INGRESAN[which(TP == "Z" & PUERTA.NUMERO == 1)]),
+                              I.ZP.P2 = sum(INGRESAN[which(TP == "Z" & PUERTA.NUMERO == 2)]),
+                              I.ZP.P3 = sum(INGRESAN[which(TP == "Z" & PUERTA.NUMERO == 3)]),
+                              I.ZP.P4 = sum(INGRESAN[which(TP == "Z" & PUERTA.NUMERO == 4)]),
+                              I.P.PN.P1 = sum(INGRESAN[which(TP == "P" & PUERTA.NUMERO == 1)]) - sum(NO.VALIDAN[TP == "P" & PUERTA.NUMERO == 1]),
+                              I.P.PN.P2 = sum(INGRESAN[which(TP == "P" & PUERTA.NUMERO == 2)]) - sum(NO.VALIDAN[TP == "P" & PUERTA.NUMERO == 2]),
+                              I.P.PN.P3 = sum(INGRESAN[which(TP == "P" & PUERTA.NUMERO == 3)]) - sum(NO.VALIDAN[TP == "P" & PUERTA.NUMERO == 3]),
+                              I.P.PN.P4 = sum(INGRESAN[which(TP == "P" & PUERTA.NUMERO == 4)]) - sum(NO.VALIDAN[TP == "P" & PUERTA.NUMERO == 4]),
+                              I.E.PN.P1 = sum(NO.VALIDAN[TP == "P" & PUERTA.NUMERO == 1]),
+                              I.E.PN.P2 = sum(NO.VALIDAN[TP == "P" & PUERTA.NUMERO == 2]),
+                              I.E.PN.P3 = sum(NO.VALIDAN[TP == "P" & PUERTA.NUMERO == 3]),
+                              I.E.PN.P4 = sum(NO.VALIDAN[TP == "P" & PUERTA.NUMERO == 4]),
                               TRI = unique(TRI)),
                        by= list(FECHA,Patente,SERVICIO,HORA.INICIO)]
 
@@ -270,7 +282,7 @@ dataframe$turnstile_marip[ind_na] <- ifelse(dataframe$FECHA[ind_na] > dataframe$
 dataframe$turnstile_marip[is.na(dataframe$turnstile_marip)] <- 0
 
 
-write.table(dataframe, file = "evasion_2016_consolidado.csv", row.names = FALSE, sep = ";")
+write.table(dataframe, file = "evasion_2017_consolidado2.csv", row.names = FALSE, sep = ";")
 
 #Working with: ############################ MERGE EVASION WITH TURNSTILE ###############################
 
@@ -287,7 +299,7 @@ write.table(dataframe, file = "evasion_2016_consolidado.csv", row.names = FALSE,
 
 
 #Setting working space
-setwd("/Users/diego/Desktop/Evasion/01_analisis/03_datos/05_LBS/2017/")
+setwd("/Users/diego/Desktop/Evasion/01_analisis/03_datos/05_LBS/2016/")
 
 
 #Reading files
@@ -321,18 +333,18 @@ lbs$Velocidad..Km.hr. <- as.numeric(gsub(",",".",lbs$Velocidad..Km.hr.))
 #write.table(lbs, file = "processed_lbs_2017.csv", row.names = FALSE, sep = ";")
 
 #Setting working space
-setwd("/Users/diego/Desktop/Evasion/01_analisis/03_datos/05_LBS/2017/")
-lbs <- read.csv(file = "processed_lbs_2017.csv", header = TRUE, sep = ";")
+setwd("/Users/diego/Desktop/Evasion/01_analisis/03_datos/05_LBS/2016/")
+lbs <- read.csv(file = "processed_lbs_2016.csv", header = TRUE, sep = ";")
 lbs$Inicio <- times(as.character(lbs$Inicio))
 lbs$Fecha <- as.Date(lbs$Fecha)
 
 
 
 #Setting working space
-setwd("/Users/diego/Desktop/Evasion/01_analisis/03_datos/02_Fiscalizacion/01_Evasion (2017)/")
+setwd("/Users/diego/Desktop/Evasion/01_analisis/03_datos/02_Fiscalizacion/02_Evasion (2016)/")
 
 #Reading files
-evasion <- read.csv(file = "evasion_2017_consolidado.csv", header = TRUE, sep = ";")
+evasion <- read.csv(file = "evasion_2016_consolidado2.csv", header = TRUE, sep = ";")
 
 #Changing variables format
 evasion$HORA.INICIO <- times(paste(evasion$HORA.INICIO,":00",sep = ""))
@@ -358,29 +370,26 @@ nocurr <- data.frame(table(fiscalizacion$ID))
 nocurr <- nocurr[which(nocurr$Freq > 1),]
 
 #Para 2016
-#fiscalizacion <- fiscalizacion[-which(fiscalizacion$ID %in% nocurr$Var1),]
+fiscalizacion <- fiscalizacion[-which(fiscalizacion$ID %in% nocurr$Var1),]
 
 
 #Reordering and saving database
-fiscalizacion <- fiscalizacion[,c(1:18,20:23,27,28,30:34,36,38)]
-names(fiscalizacion)[2] <- "Fecha"
+fiscalizacion <- fiscalizacion[,c(2,30,3,40,42,1,39,50,4,43,44,46,45,5:29,34,35,48)]
+names(fiscalizacion)[1] <- "Fecha"
 names(fiscalizacion)[3] <- "COD_USU"
-names(fiscalizacion)[4] <- "Ini_Fisca"
-names(fiscalizacion)[23] <- "UN"
-names(fiscalizacion)[24] <- "COD_TS"
-names(fiscalizacion)[26] <- "Ini_LBS"
-names(fiscalizacion)[27] <- "Fin_LBS"
-names(fiscalizacion)[28] <- "L(m)"
-
-fiscalizacion <- fiscalizacion[,c(2,18,3,24,25,1,23,31,4,26,27,29,28,5:17,21,22,30)]
+names(fiscalizacion)[4] <- "COD_TS"
+names(fiscalizacion)[9] <- "Ini_Fisca"
+names(fiscalizacion)[10] <- "Ini_LBS"
+names(fiscalizacion)[11] <- "Fin_LBS"
+names(fiscalizacion)[13] <- "L(m)"
 
 ind_ntor <- which(fiscalizacion$turnstile==0)
 
 fiscalizacion$turnstile <- 0
-names(fiscalizacion)[27] <- "n_turnstile"
+names(fiscalizacion)[39] <- "n_turnstile"
 fiscalizacion$n_turnstile[ind_ntor] <- 1
 
-write.table(fiscalizacion, file = "BBDD_2017_consolidada.csv", row.names = FALSE, sep = ";")
+write.table(fiscalizacion, file = "BBDD_2016_consolidada_2.csv", row.names = FALSE, sep = ";")
 
 #Working with: ############################ MERGE BETWEEN EVASION AND LBS ###############################
   
@@ -396,7 +405,7 @@ write.table(fiscalizacion, file = "BBDD_2017_consolidada.csv", row.names = FALSE
 
 #Setting working space
 setwd("/Users/diego/Desktop/Evasion/01_analisis/03_datos/08_datavel/")
-datavel <- read.csv(file = "datavel_2017.csv", header = FALSE, sep = ";")
+datavel <- read.csv(file = "datavel_2016.csv", header = FALSE, sep = ";")
 datavel <- datavel[,-5]
 names(datavel) <- c("Patente","COD_SINRUTA","PosIni","PosFin")
 
@@ -415,7 +424,7 @@ datavel$Patente <- as.factor(datavel$Patente)
 
 #Setting working space
 setwd("/Users/diego/Desktop/Evasion/01_analisis/03_datos/07_Bases_consolidadas/")
-evasion <- read.csv(file = "BBDD_2017_consolidada.csv", header = TRUE, sep = ";")
+evasion <- read.csv(file = "BBDD_2016_consolidada_2.csv", header = TRUE, sep = ";")
 evasion$Fecha <- as.Date(evasion$Fecha)
 evasion$Ini_Fisca <- times(as.character(evasion$Ini_Fisca))
 
@@ -438,11 +447,11 @@ dataframe <- dataframe[!is.na(dataframe$COD_SINRUTA),]
 nocurr <- data.frame(table(dataframe$ID))
 nocurr <- nocurr[which(nocurr$Freq > 1),]
 
-#Para 2016
+#Deleting duplicates
 dataframe <- dataframe[-which(dataframe$ID %in% nocurr$Var1),]
 
 
-write.table(dataframe, file = "BBDD_2017_consolidada_CODSIN.csv", row.names = FALSE, sep = ";")
+write.table(dataframe, file = "BBDD_2016_consolidada_CODSIN_2.csv", row.names = FALSE, sep = ";")
 
 
 
@@ -457,8 +466,8 @@ write.table(dataframe, file = "BBDD_2017_consolidada_CODSIN.csv", row.names = FA
 #Setting working space
 setwd("/Users/diego/Desktop/Evasion/01_analisis/03_datos/07_Bases_consolidadas/")
 
-base_2016 <- read.csv(file = "BBDD_2016_consolidada_CODSIN.csv", header = TRUE, sep = ";")
-base_2017 <- read.csv(file = "BBDD_2017_consolidada_CODSIN.csv", header = TRUE, sep = ";")
+base_2016 <- read.csv(file = "BBDD_2016_consolidada_CODSIN_2.csv", header = TRUE, sep = ";")
+base_2017 <- read.csv(file = "BBDD_2017_consolidada_CODSIN_2.csv", header = TRUE, sep = ";")
 base_fisca <- rbind(base_2016,base_2017)
 rm(base_2016,base_2017)
 
@@ -496,7 +505,7 @@ data <- data[!is.na(data$Código.TCAD),]
 duplicados <- data[duplicated(data$ID) | duplicated(data$ID, fromLast = TRUE),]
 
 #Writing dataset
-#write.table(data, file = "base_modelo.csv", row.names = FALSE, sep = ";")
+write.table(data, file = "base_modelo.csv", row.names = FALSE, sep = ";")
 
 #Getting route names by date
 data$Fecha <- factor(data$Fecha, levels = unique(data$Fecha))
