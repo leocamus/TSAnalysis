@@ -185,14 +185,13 @@ write.table(evasion, file = "evasion_2017_edit.csv", row.names = FALSE, sep = ";
 #Working with: ############################ MERGE EVASION WITH TURNSTILE ###############################
 #Script description:  Script para procesar datos de fiscalización editados, consolidarlos por expedición y determinar
 #                     número de expediciones con y sin torniquete. Output: evasion_consolidado
-### PARA AÑO 2016 ###
 
 #Setting working space
-setwd("/Users/diego/Desktop/Evasion/01_analisis/03_datos/02_Fiscalizacion/01_Evasion (2017)/")
+setwd("/Users/diego/Desktop/Evasion/01_analisis/03_datos/02_Fiscalizacion/")
 
 #Reading files
 #Evasion
-evasion <- read.csv(file = "evasion_2017_edit.csv", header = TRUE, sep = ";")
+evasion <- read.csv(file = "evasion_edit.csv", header = TRUE, sep = ";")
 evasion$FECHA <- as.Date(evasion$FECHA)
 
 #Setting working space
@@ -230,7 +229,11 @@ evasion$NO.VALIDAN[which(evasion$TP=="Z" & evasion$NO.VALIDAN !=0)] <- 0
 
 #Collapsing evasion dataset by expedition
 dataframe <- data.table(evasion)
-dataframe <- dataframe[, list(DET = max(table(PUERTA.NUMERO)),
+dataframe <- dataframe[, list(N.P = unique(NUMERO.DE.PUERTAS),
+                              DET1 = table(PUERTA.NUMERO)[1],
+                              DET2 = table(PUERTA.NUMERO)[2],
+                              DET3 = table(PUERTA.NUMERO)[3],
+                              DET4 = table(PUERTA.NUMERO)[4],
                               Y = sum(INGRESAN),
                               EV = sum(NO.VALIDAN),
                               I.PN = sum(INGRESAN[which(TP == "P")]),
@@ -333,8 +336,8 @@ lbs$Velocidad..Km.hr. <- as.numeric(gsub(",",".",lbs$Velocidad..Km.hr.))
 #write.table(lbs, file = "processed_lbs_2017.csv", row.names = FALSE, sep = ";")
 
 #Setting working space
-setwd("/Users/diego/Desktop/Evasion/01_analisis/03_datos/05_LBS/2016/")
-lbs <- read.csv(file = "processed_lbs_2016.csv", header = TRUE, sep = ";")
+setwd("/Users/diego/Desktop/Evasion/01_analisis/03_datos/05_LBS/2017/")
+lbs <- read.csv(file = "processed_lbs_2017.csv", header = TRUE, sep = ";")
 lbs$Inicio <- times(as.character(lbs$Inicio))
 lbs$Fecha <- as.Date(lbs$Fecha)
 
@@ -629,6 +632,80 @@ OLS <- lm(as.formula("texp~."), data = data.all)
 
 
 
+
+
+
+
+#Working with: ############################ CONSOLIDADO DE PARADAS ###############################
+
+#Setting working space
+setwd("/Users/diego/Desktop/Evasion/01_analisis/03_datos/04_NI/")
+signals <- read.csv(file = "NI.csv", header = TRUE, sep = ";")
+
+#Editing signals dataframe
+signals$ROUTE_NAME <- as.character(signals$ROUTE_NAME)
+signals$ROUTE_NAME <- gsub(" ","",signals$ROUTE_NAME)
+signals$ROUTE_NAME <- toupper(signals$ROUTE_NAME)
+signals$Desde <- as.Date(as.character(signals$Desde))
+signals$Hasta <- as.Date(as.character(signals$Hasta))
+signals <- signals[!duplicated(signals),]
+
+#Setting working space
+setwd("/Users/diego/Desktop/Evasion/01_analisis/03_datos/07_Bases_consolidadas/")
+
+#Reading input files
+dataframe <- read.csv(file = "base_modelo.csv", header = TRUE, sep = ";")
+
+#Editing expedition dataframe
+dataframe$Código.TCAD <- as.character(dataframe$Código.TCAD)
+dataframe$Código.TCAD <- gsub(" ","",dataframe$Código.TCAD)
+dataframe$Código.TCAD <- toupper(dataframe$Código.TCAD)
+dataframe$Fecha <- as.Date(as.character(dataframe$Fecha))
+names(dataframe)[50] <- "CodTCAD"
+
+#Merge between route and number of signals by date
+database <- sqldf('SELECT dataframe.*, signals.* 
+                  FROM dataframe 
+                  LEFT JOIN signals 
+                  ON dataframe.CodTCAD = signals.ROUTE_NAME
+                  AND dataframe.Fecha BETWEEN signals.Desde AND signals.Hasta')
+
+#Getting NAs
+ind_na <- which(is.na(database$NI))
+test_na <- database[ind_na,]
+
+#Deleting NAs
+database <- database[-ind_na,]
+
+#Getting a USER CODE to merge databse with paradas
+database$COD_USU_SENTIDO <- paste(database$COD_USU, substr(database$Sentido,1,1), sep = "")
+
+
+
+#Setting working space
+setwd("/Users/diego/Desktop/Evasion/01_analisis/03_datos/09_Consolidado_Paradas/")
+
+paradas <- read.csv(file = "2018-01-01_consolidado_anexo4.csv", header = TRUE, sep = ";")
+
+paradas$Servicio.Usuario <- as.character(paradas$Servicio.Usuario)
+paradas$Sentido.Servicio <- as.character(paradas$Sentido.Servicio)
+
+paradas$Servicio.Usuario <- gsub(" ","", paradas$Servicio.Usuario)
+paradas$Servicio.Usuario <- toupper(paradas$Servicio.Usuario)
+paradas$Sentido.Servicio <- gsub(" ","",paradas$Sentido.Servicio)
+paradas$Sentido.Servicio <- toupper(paradas$Sentido.Servicio)
+
+paradas$COD_USU_SENTIDO <- paste(paradas$Servicio.Usuario,paradas$Sentido.Servicio,paradas$Varian.te,sep = "")
+paradas$COD_USU_SENTIDO <- gsub(" ","",paradas$COD_USU_SENTIDO)
+
+data_paradas <- data.table(paradas)
+data_paradas <- data_paradas[, list(Paraderos = .N),
+                             by = COD_USU_SENTIDO]
+
+database_paradas <- join(database, data_paradas, by= "COD_USU_SENTIDO")
+
+
+#Working with: ############################ CONSOLIDADO DE PARADAS ###############################
 
 
 
