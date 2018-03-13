@@ -144,6 +144,276 @@ libs <- c("data.table",
 getLibraries(libs)
 ```
 
+El siguiente script se utiliza para leer la base de datos de fiscalización (ambos años de datos) y se consolidan las distintas variables por expedición (mismo día, servicio, patente y hora de inicio).
+
+```{r include=FALSE}
+#Setting working space
+setwd("/Users/diego/Desktop/Evasion/01_analisis/03_datos/02_Fiscalizacion/")
+
+#Reading files
+#Evasion
+evasion <- read.csv(file = "evasion_edit.csv", header = TRUE, sep = ";")
+evasion$FECHA <- as.Date(evasion$FECHA)
+
+#Setting working space
+setwd("/Users/diego/Desktop/Evasion/01_analisis/03_datos/")
+
+#Torniquete mariposa
+torn_marip <- read.csv(file = "torniquetes_mariposa.csv", header = TRUE, sep = ";")
+torn_marip$X <- NULL
+names(torn_marip) <- c("UN","Patente","Fecha_mariposa")
+torn_marip$Patente <- gsub(" ","",torn_marip$Patente)
+torn_marip$Patente <- toupper(torn_marip$Patente)
+torn_marip$Fecha_mariposa <- gsub(" ","", torn_marip$Fecha_mariposa)
+torn_marip$Patente <- as.character(torn_marip$Patente)
+ind <- which(!grepl("-", torn_marip$Patente))
+torn_marip$Patente[ind] <- unlist(lapply(torn_marip$Patente[ind], FUN = fill_patente))
+torn_marip$Fecha_mariposa <- as.Date(torn_marip$Fecha_mariposa, format= "%Y-%m-%d")
+
+#Total torniquete
+torniquete <- read.csv(file = "torniquetes.csv", header = TRUE, sep = ";")
+torniquete <- torniquete[,1:2]
+torniquete$Instalacion <- as.Date(torniquete$Instalacion)
+torniquete$Patente <- gsub(" ","",torniquete$Patente)
+torniquete$Patente <- toupper(torniquete$Patente)
+
+#Deleting white spaces
+evasion$TP <- gsub(" ", "", evasion$TP)
+evasion$TP <- toupper(evasion$TP)
+
+#Changing factor levels
+evasion$TP <- factor(evasion$TP, levels = unique(evasion$TP))
+
+#Considerando que no existe evasión en zonas pagas.
+evasion$NO.VALIDAN[which(evasion$TP=="Z" & evasion$NO.VALIDAN !=0)] <- 0
+
+#Editando algunos número de puertas para patentes
+evasion$NUMERO.DE.PUERTAS[which(evasion$Patente=="WU-5561")] <- 2
+evasion$NUMERO.DE.PUERTAS[which(evasion$Patente=="FZJL-60")] <- 3
+evasion$NUMERO.DE.PUERTAS[which(evasion$Patente=="FLXG-79")] <- 2
+evasion$NUMERO.DE.PUERTAS[which(evasion$Patente=="CJRV-40")] <- 2
+evasion$NUMERO.DE.PUERTAS[which(evasion$Patente=="CJRV-80")] <- 2
+evasion$NUMERO.DE.PUERTAS[which(evasion$Patente=="ZN-6268")] <- 3
+evasion$NUMERO.DE.PUERTAS[which(evasion$Patente=="CJRW-75")] <- 3
+evasion$NUMERO.DE.PUERTAS[which(evasion$Patente=="CJRV-43")] <- 2
+evasion$NUMERO.DE.PUERTAS[which(evasion$Patente=="FLXG-87")] <- 2
+evasion$NUMERO.DE.PUERTAS[which(evasion$Patente=="FLXR-73")] <- 2
+evasion$NUMERO.DE.PUERTAS[which(evasion$Patente=="CJRG-61")] <- 3
+evasion$NUMERO.DE.PUERTAS[which(evasion$Patente=="BJFY-71")] <- 3
+evasion$NUMERO.DE.PUERTAS[which(evasion$Patente=="FLXR-94")] <- 3
+evasion$NUMERO.DE.PUERTAS[which(evasion$Patente=="CJRR-13")] <- 2
+evasion$NUMERO.DE.PUERTAS[which(evasion$Patente=="CJRS-98")] <- 3
+evasion$NUMERO.DE.PUERTAS[which(evasion$Patente=="CJRW-85")] <- 2
+evasion$NUMERO.DE.PUERTAS[which(evasion$Patente=="FLXJ-57")] <- 2
+evasion$NUMERO.DE.PUERTAS[which(evasion$Patente=="CJRP-84")] <- 2
+evasion$NUMERO.DE.PUERTAS[which(evasion$Patente=="CJRV-93")] <- 2
+evasion$NUMERO.DE.PUERTAS[which(evasion$Patente=="FLXS-25")] <- 2
+evasion$NUMERO.DE.PUERTAS[which(evasion$Patente=="WV-5577")] <- 2
+evasion$NUMERO.DE.PUERTAS[which(evasion$Patente=="BJFK-73")] <- 4
+evasion$NUMERO.DE.PUERTAS[which(evasion$Patente=="BJFJ-41")] <- 4
+evasion$NUMERO.DE.PUERTAS[which(evasion$Patente=="CBWR-45")] <- 3
+evasion$NUMERO.DE.PUERTAS[which(evasion$Patente=="CJRP-87")] <- 2
+
+#Editando algunos número de puertas para registros 
+evasion$PUERTA.NUMERO[9550:9578] <- 2
+evasion$PUERTA.NUMERO[151806:151814] <- 3
+evasion$PUERTA.NUMERO[157898:157907] <- 2
+evasion$PUERTA.NUMERO[215479:215485] <- 3
+evasion$PUERTA.NUMERO[234874:234882] <- 3
+
+
+#Umbral (pax/detención) que define la demanda para la cual se visibiliza el efecto del torniquete
+X <- 5
+
+#Collapsing evasion dataset by expedition
+dataframe <- data.table(evasion)
+dataframe <- dataframe[, list(Puertas = unique(NUMERO.DE.PUERTAS),
+                              DET1 = table(PUERTA.NUMERO)[1],
+                              DET2 = table(PUERTA.NUMERO)[2],
+                              DET3 = table(PUERTA.NUMERO)[3],
+                              DET4 = table(PUERTA.NUMERO)[4],
+                              DET = max(table(PUERTA.NUMERO)),
+                              Y = sum(INGRESAN),
+                              EV = sum(NO.VALIDAN),
+                              
+                              DET.ESP.PN1 = length(INGRESAN[which(TP == "P" & PUERTA.NUMERO == 1 & INGRESAN >= X)]),
+                              DET.ESP.ZP1 = length(INGRESAN[which(TP == "Z" & PUERTA.NUMERO == 1 & INGRESAN >= X)]),
+                              
+                              I.NO.EFECT.P1.PN = sum(INGRESAN[which(TP == "P" & PUERTA.NUMERO == 1 & INGRESAN < X)]),
+                              I.EFECT.P1.PN = sum(INGRESAN[which(TP == "P" & PUERTA.NUMERO == 1 & INGRESAN >= X)]),
+                              I.REM.P1.PN = sum(INGRESAN[which(TP == "P" & PUERTA.NUMERO == 1 & INGRESAN >= X)] - (X-1)),
+                              
+                              I.NO.EFECT.P1.ZP = sum(INGRESAN[which(TP == "Z" & PUERTA.NUMERO == 1 & INGRESAN < X)]),
+                              I.EFECT.P1.ZP = sum(INGRESAN[which(TP == "Z" & PUERTA.NUMERO == 1 & INGRESAN >= X)]),
+                              I.REM.P1.ZP = sum(INGRESAN[which(TP == "Z" & PUERTA.NUMERO == 1 & INGRESAN >= X)] - (X-1)),
+                              
+                              I.PN = sum(INGRESAN[which(TP == "P")]),
+                              I.ZP = sum(INGRESAN[which(TP == "Z")]),
+                              I.P1 = sum(INGRESAN[which(PUERTA.NUMERO == 1)]),
+                              I.P2 = sum(INGRESAN[which(PUERTA.NUMERO == 2)]),
+                              I.P3 = sum(INGRESAN[which(PUERTA.NUMERO == 3)]),
+                              I.P4 = sum(INGRESAN[which(PUERTA.NUMERO == 4)]),
+                              I.PN.P1 = sum(INGRESAN[which(TP == "P" & PUERTA.NUMERO == 1)]),
+                              I.PN.P2 = sum(INGRESAN[which(TP == "P" & PUERTA.NUMERO == 2)]),
+                              I.PN.P3 = sum(INGRESAN[which(TP == "P" & PUERTA.NUMERO == 3)]),
+                              I.PN.P4 = sum(INGRESAN[which(TP == "P" & PUERTA.NUMERO == 4)]),
+                              I.ZP.P1 = sum(INGRESAN[which(TP == "Z" & PUERTA.NUMERO == 1)]),
+                              I.ZP.P2 = sum(INGRESAN[which(TP == "Z" & PUERTA.NUMERO == 2)]),
+                              I.ZP.P3 = sum(INGRESAN[which(TP == "Z" & PUERTA.NUMERO == 3)]),
+                              I.ZP.P4 = sum(INGRESAN[which(TP == "Z" & PUERTA.NUMERO == 4)]),
+                              I.P.PN.P1 = sum(INGRESAN[which(TP == "P" & PUERTA.NUMERO == 1)]) - sum(NO.VALIDAN[TP == "P" & PUERTA.NUMERO == 1]),
+                              I.P.PN.P2 = sum(INGRESAN[which(TP == "P" & PUERTA.NUMERO == 2)]) - sum(NO.VALIDAN[TP == "P" & PUERTA.NUMERO == 2]),
+                              I.P.PN.P3 = sum(INGRESAN[which(TP == "P" & PUERTA.NUMERO == 3)]) - sum(NO.VALIDAN[TP == "P" & PUERTA.NUMERO == 3]),
+                              I.P.PN.P4 = sum(INGRESAN[which(TP == "P" & PUERTA.NUMERO == 4)]) - sum(NO.VALIDAN[TP == "P" & PUERTA.NUMERO == 4]),
+                              I.E.PN.P1 = sum(NO.VALIDAN[TP == "P" & PUERTA.NUMERO == 1]),
+                              I.E.PN.P2 = sum(NO.VALIDAN[TP == "P" & PUERTA.NUMERO == 2]),
+                              I.E.PN.P3 = sum(NO.VALIDAN[TP == "P" & PUERTA.NUMERO == 3]),
+                              I.E.PN.P4 = sum(NO.VALIDAN[TP == "P" & PUERTA.NUMERO == 4]),
+                              TRI = unique(TRI)),
+                       by= list(FECHA,Patente,SERVICIO,HORA.INICIO)]
+
+
+dataframe$EXP.ID <- paste(dataframe$FECHA,dataframe$Patente,dataframe$SERVICIO,dataframe$HORA.INICIO)
+if(nrow(dataframe[duplicated(dataframe$EXP.ID) | duplicated(dataframe$EXP.ID, fromLast = TRUE),]) != 0){message("DUPLICADOS. REVISAR NÚMERO DE PUERTAS POR PATENTE.")}
+
+#Deleting rare cases
+dataframe$DET.ID <- apply(dataframe[,5:9], 1, function(x){ifelse(sum(!is.na(x[2:5])) != x[1],1,0)})
+test <- dataframe[which(dataframe$DET.ID==1),]
+
+dataframe <- dataframe[-which(dataframe$DET.ID==1),]
+
+#Se calcula expediciones con diferente número de detenciones por puertas
+exp_n2 <- dataframe[which(dataframe$Puertas==2),]
+exp_n3 <- dataframe[which(dataframe$Puertas==3),]
+exp_n4 <- dataframe[which(dataframe$Puertas==4),]
+
+
+exp_n2_dist <- exp_n2[which(apply(exp_n2[,c(6,7)], 1, function(x){length(which(diff(x) !=0))}) != 0),]
+exp_n3_dist <- exp_n3[which(apply(exp_n3[,c(6,7,8)], 1, function(x){length(which(diff(x) !=0))}) != 0),]
+exp_n4_dist <- exp_n4[which(apply(exp_n4[,c(6,7,8,9)], 1, function(x){length(which(diff(x) !=0))}) != 0),]
+
+
+exp_n2_dist$dif <- apply(exp_n2_dist[,c(6,7)], 1, function(x){max(abs(diff(x)))})
+exp_n3_dist$dif <- apply(exp_n3_dist[,c(6,7,8)], 1, function(x){max(abs(diff(x)))})
+exp_n4_dist$dif <- apply(exp_n4_dist[,c(6,7,8,9)], 1, function(x){max(abs(diff(x)))})
+
+
+
+
+
+
+
+
+
+
+
+fields = c("field1","field2")
+
+
+dataframe2 <- data.table(evasion)
+dataframe2 <- dataframe2[ , c("1","2") := list(sum(INGRESAN),sum(NO.VALIDAN)),
+                         by = FECHA]
+
+
+
+dataframe2 <- dataframe2[, .N, by = list(FECHA,Patente,SERVICIO,HORA.INICIO)]
+
+
+
+
+
+
+#Collapsing evasion dataset by expedition
+dataframe2 <- data.table(evasion)
+dataframe2 <- dataframe2[, c("N.P",
+                             "DET1",
+                             "DET2",
+                             "DET3",
+                             "DET4",
+                             "DET",
+                             "DET.ESP.PN1",
+                             "DET.ESP.ZP1",
+                             "Y",
+                             "EV",
+                             "I.NO.EFECT.P1.PN",
+                             "I.EFECT.P1.PN",
+                             "I.REM.P1.PN",
+                             "I.NO.EFECT.P1.ZP",
+                             "I.EFECT.P1.ZP",
+                             "I.REM.P1.ZP",
+                             "I.PN",
+                             "I.ZP",
+                             "I.P1",
+                             "I.P2",
+                             "I.P3",
+                             "I.P4",
+                             "I.PN.P1",
+                             "I.PN.P2",
+                             "I.PN.P3",
+                             "I.PN.P4",
+                             "I.ZP.P1",
+                             "I.ZP.P2",
+                             "I.ZP.P3",
+                             "I.ZP.P4",
+                             "I.P.PN.P1",
+                             "I.P.PN.P2",
+                             "I.P.PN.P3",
+                             "I.P.PN.P4",
+                             "I.E.PN.P1",
+                             "I.E.PN.P2",
+                             "I.E.PN.P3",
+                             "I.E.PN.P4",
+                             "TRI") := list(unique(NUMERO.DE.PUERTAS),
+                                            table(PUERTA.NUMERO)[1],
+                                            table(PUERTA.NUMERO)[2],
+                                            table(PUERTA.NUMERO)[3],
+                                            table(PUERTA.NUMERO)[4],
+                                            max(table(PUERTA.NUMERO)),
+                                            length(INGRESAN[which(TP == "P" & PUERTA.NUMERO == 1 & INGRESAN >= X)]),
+                                            length(INGRESAN[which(TP == "Z" & PUERTA.NUMERO == 1 & INGRESAN >= X)]),
+                                            sum(INGRESAN),
+                                            sum(NO.VALIDAN),
+                                            sum(INGRESAN[which(TP == "P" & PUERTA.NUMERO == 1 & INGRESAN < X)]),
+                                            sum(INGRESAN[which(TP == "P" & PUERTA.NUMERO == 1 & INGRESAN >= X)]),
+                                            sum(INGRESAN[which(TP == "P" & PUERTA.NUMERO == 1 & INGRESAN >= X)] - (X-1)),
+                                            sum(INGRESAN[which(TP == "Z" & PUERTA.NUMERO == 1 & INGRESAN < X)]),
+                                            sum(INGRESAN[which(TP == "Z" & PUERTA.NUMERO == 1 & INGRESAN >= X)]),
+                                            sum(INGRESAN[which(TP == "Z" & PUERTA.NUMERO == 1 & INGRESAN >= X)] - (X-1)),
+                                            sum(INGRESAN[which(TP == "P")]),
+                                            sum(INGRESAN[which(TP == "Z")]),
+                                            sum(INGRESAN[which(PUERTA.NUMERO == 1)]),
+                                            sum(INGRESAN[which(PUERTA.NUMERO == 2)]),
+                                            sum(INGRESAN[which(PUERTA.NUMERO == 3)]),
+                                            sum(INGRESAN[which(PUERTA.NUMERO == 4)]),
+                                            sum(INGRESAN[which(TP == "P" & PUERTA.NUMERO == 1)]),
+                                            sum(INGRESAN[which(TP == "P" & PUERTA.NUMERO == 2)]),
+                                            sum(INGRESAN[which(TP == "P" & PUERTA.NUMERO == 3)]),
+                                            sum(INGRESAN[which(TP == "P" & PUERTA.NUMERO == 4)]),
+                                            sum(INGRESAN[which(TP == "Z" & PUERTA.NUMERO == 1)]),
+                                            sum(INGRESAN[which(TP == "Z" & PUERTA.NUMERO == 2)]),
+                                            sum(INGRESAN[which(TP == "Z" & PUERTA.NUMERO == 3)]),
+                                            sum(INGRESAN[which(TP == "Z" & PUERTA.NUMERO == 4)]),
+                                            sum(INGRESAN[which(TP == "P" & PUERTA.NUMERO == 1)]) - sum(NO.VALIDAN[TP == "P" & PUERTA.NUMERO == 1]),
+                                            sum(INGRESAN[which(TP == "P" & PUERTA.NUMERO == 2)]) - sum(NO.VALIDAN[TP == "P" & PUERTA.NUMERO == 2]),
+                                            sum(INGRESAN[which(TP == "P" & PUERTA.NUMERO == 3)]) - sum(NO.VALIDAN[TP == "P" & PUERTA.NUMERO == 3]),
+                                            sum(INGRESAN[which(TP == "P" & PUERTA.NUMERO == 4)]) - sum(NO.VALIDAN[TP == "P" & PUERTA.NUMERO == 4]),
+                                            sum(NO.VALIDAN[TP == "P" & PUERTA.NUMERO == 1]),
+                                            sum(NO.VALIDAN[TP == "P" & PUERTA.NUMERO == 2]),
+                                            sum(NO.VALIDAN[TP == "P" & PUERTA.NUMERO == 3]),
+                                            sum(NO.VALIDAN[TP == "P" & PUERTA.NUMERO == 4]),
+                                            unique(TRI)),
+                         by= list(FECHA,Patente,SERVICIO,HORA.INICIO)][]
+
+```
+
+
+
+
+
+
+
+
+
 Getting and editing signals dataframe
 ```{r Signals}
 
@@ -166,7 +436,7 @@ signals <- signals[!duplicated(signals),]
 
 
 Getting and editing variables dataframe
-```{r Expedition times}
+```{r Expedition times, echo=FALSE}
 #Setting working space
 setwd("/Users/diego/Desktop/Evasion/01_analisis/03_datos/07_Bases_consolidadas/")
 
@@ -193,6 +463,13 @@ test_na <- database[ind_na,]
 
 #Deleting NAs
 database <- database[-ind_na,]
+
+#Keeping track of mismatches between ROUTE_NAME and COD_USU
+database$ROUTE_NAME2 <- unlist(lapply(strsplit(database$ROUTE_NAME, "_"), `[[`, 1))
+database$ROUTE_NAME3 <- substr(database$ROUTE_NAME2,1,4)
+database$COD_USU_SENTIDO <- paste(database$COD_USU, substr(database$Sentido,1,1), sep = "")
+
+rare_cases <- database[which(database$ROUTE_NAME3 != database$COD_USU_SENTIDO),]
 ```
 
 
@@ -222,6 +499,12 @@ Número de expediciones con torniquete mariposa:
 sum(database$turnstile_marip)
 ```
 
+Recorridos que tienen expediciones con torniquete mariposa:
+```{r echo=FALSE}
+unique(database$ROUTE_NAME[which(database$turnstile_marip==1)])
+```
+
+
 Número de expediciones con torniquete mariposa en periodo punta:
 
 ```{r echo=FALSE}
@@ -230,20 +513,43 @@ ind_peak <- which(database$Periodo == "04 - Punta Manana" | database$Periodo == 
 sum(database$turnstile_marip[ind_peak])
 ```
 
-Número de expediciones con torniquete mariposa en periodo punta por recorrido-sentido:
-
-```{r eval=FALSE, include=FALSE}
-
-ind_tmarip_peak <- which((database$Periodo == "04 - Punta Manana" | database$Periodo == "09 - Punta Tarde") & database$turnstile_marip == 1)
-data_marip_peak <- database[ind_tmarip_peak,]
-data.frame(table(data_marip_peak$COD_USU))
-```
-
 
 Número de expediciones con torniquete de tres brazos:
 ```{r echo=FALSE}
 length(which(database$n_turnstile==0 & database$turnstile_marip==0))
 ```
+
+
+Número de expediciones con torniquete mariposa en periodo punta (mañana o tarde) por recorrido-sentido:
+
+```{r echo=FALSE}
+
+ind_tmarip_peak <- which((database$Periodo == "04 - Punta Manana" | database$Periodo == "09 - Punta Tarde") & database$turnstile_marip == 1)
+data_marip_peak <- database[ind_tmarip_peak,]
+tmp <- data.frame(table(data_marip_peak$COD_USU))
+head(tmp[order(tmp$Freq, decreasing = TRUE),], 10)
+```
+
+
+Número de observaciones por periodo y si tiene o no torniquete:
+
+```{r echo=FALSE}
+#Agregando variable por uso de torniquete de tres brazos
+database$turnstile_3b <- 0
+ind_3b <- which(database$n_turnstile==0 & database$turnstile_marip == 0)
+database$turnstile_3b[ind_3b] <- 1
+
+#Dataframe que contiene Periodos y si tiene o no torniquete más si tiene o no mariposa.
+tmp_no <- as.data.frame.matrix(table(database$Periodo, database$n_turnstile))[,-1]
+tmp_si <- as.data.frame.matrix(table(database$Periodo, database$turnstile_marip))[,-1]
+tmp_3b <- as.data.frame.matrix(table(database$Periodo, database$turnstile_3b))[,-1]
+
+dt <- data.frame(table(database$Periodo),tmp_no, tmp_si,tmp_3b)
+names(dt) <- c("Periodo","Total","Sin","Mariposa","3B")
+dt
+
+```
+
 
 
 ### Histograma tiempos de expedicion:
@@ -341,7 +647,7 @@ summary(modelo_01)
 
 El segundo modelo corresponde a una extensión del primero, pero considerando una dummy para el número de intersecciones semaforizadas que sea uno en el caso que la expedición se haga en un periodo punta (punta mañana o tarde). Dando cuenta de la programación más favorable que se puede encontrar en dichos periodos o también de congestión por sobresaturación en algunos casos.
 
-$T = c + t_{L} \cdot L + t_{s}\cdot S + t_{Y}\cdot Y + t_{I}\cdot N_{I} + t_{peak}^{I} \cdot \tau_{peak} \cdot N_{I}$
+$T = c + t_{L} \cdot L + t_{s}\cdot S + t_{Y}\cdot Y + \Big( t_{I} + t_{peak}^{I} \cdot \tau_{peak}\Big) \cdot N_{I}$
 
 ```{r Modelo2, echo=FALSE}
 #Adding time period variables
@@ -359,9 +665,9 @@ summary(modelo_02)
 ```
 
 ### Modelo 3
-En el siguiente modelo agrega una variable dummy por la demanda total de la expedición. Esta variable será uno en el caso que el viaje se haga en un periodo punta (punta mañana o punta tarde)
+En el siguiente modelo agrega una variable dummy por la demanda total de la expedición. Esta variable será uno en el caso que el viaje se haga en un periodo punta (punta mañana o punta tarde), $i.e.$:
 
-$T = c + t_{L} \cdot L + t_{s}\cdot S + t_{Y}\cdot Y + t_{Y}^{peak} \cdot \tau_{peak} \cdot Y + t_{I}\cdot N_{I} + t_{peak}^{I} \cdot \tau_{peak} \cdot N_{I}$
+$T = c + t_{L} \cdot L + t_{s}\cdot S + \Big( t_{Y} + t_{Y}^{peak} \cdot \tau_{peak} \Big) \cdot Y + \Big( t_{I} + t_{peak}^{I} \cdot \tau_{peak}\Big) \cdot N_{I}$
 
 ```{r Modelo3, echo=FALSE}
 
@@ -378,21 +684,36 @@ summary(modelo_03)
 
 
 ### Modelo 4
-En el siguiente modelo se saca la componente extra de demora por intersecciones semaforizadas y se agrega una variable de demanda total en presencia de torniquete mariposa.
+En el siguiente modelo se agrega una componente temporal debido a la tendencia al aumento que tienen los tiempos de viaje a lo largo del tiempo, para esto se utiliza como unidad temporal el trimestre, $i.e.$:
+
+$T = c + t_{L} \cdot L + t_{s}\cdot S + t_{t} \cdot TRI + \Big( t_{Y} + t_{Y}^{peak} \cdot \tau_{peak} \Big) \cdot Y + \Big( t_{I} + t_{peak}^{I} \cdot \tau_{peak}\Big) \cdot N_{I}$
 
 ```{r Modelo4, echo=FALSE}
-#Adding 3B turnstile variable
-database$turnstile_3b <- 0
-ind_3b <- which(database$n_turnstile==0 & database$turnstile_marip == 0)
-database$turnstile_3b[ind_3b] <- 1
-
-#Adding turnstile variable during peak periods
-Y_mar <- database$Y * database$turnstile_marip
-Y_3b <- database$Y * database$turnstile_3b
+#Agregando tendencia en el tiempo
+database$U_TRI <- database$TRI
+database$U_TRI[which(substr(database$Fecha,1,4) == "2017" & database$TRI == 1)] <- 5
+database$U_TRI[which(substr(database$Fecha,1,4) == "2017" & database$TRI == 2)] <- 6
+database$U_TRI[which(substr(database$Fecha,1,4) == "2017" & database$TRI == 3)] <- 7
+database$U_TRI[which(substr(database$Fecha,1,4) == "2017" & database$TRI == 4)] <- 8
 
 #Dataframe
-data.all <- data.frame(database$TEXP, database$L.m., database$DET, database$Y,Y_peak, Y_mar, database$NI)
-names(data.all) <- c("texp","largo","detenciones","Y","Y_Peak","Y_Marip", "NI")
+data.all <- data.frame(database$TEXP, 
+                       database$L.m., 
+                       database$U_TRI, 
+                       database$DET, 
+                       database$Y,
+                       Y_peak,
+                       database$NI,
+                       NI_peak)
+
+names(data.all) <- c("texp",
+                     "largo",
+                     "TRI",
+                     "detenciones",
+                     "Y",
+                     "Y_Peak",
+                     "NI",
+                     "NI_peak")
 
 modelo_04 <- lm(as.formula("texp~."), data = data.all)
 summary(modelo_04)
@@ -400,7 +721,11 @@ summary(modelo_04)
 
 
 ### Modelo 5
-El siguiente modelo es el modelo 4, pero desagregando la demanda por puerta de acceso.
+Se desiste de utilizar variable asociada a la tendencia de los tiempos de viaje (se debiesen tener muchas más observaciones en el tiempo y modelo debiese en tal caso mutar para controlar por otros efectos como días o meses especiales).
+
+El siguiente modelo es el Modelo 3, pero desagregando la demanda por puerta de acceso y eliminando variable de tendencia (trimestre).
+
+$T = c + t_{L} \cdot L + t_{s}\cdot S + \Big( t_{Y} + t_{Y}^{peak} \cdot \tau_{peak} \Big) \cdot Y_{P1} + t_{resto}^{Y} \cdot Y_{resto} + \Big( t_{I} + t_{peak}^{I} \cdot \tau_{peak}\Big) \cdot N_{I}$
 
 ```{r Modelo5, echo=FALSE}
 
@@ -412,55 +737,29 @@ Y_P1_marip <- database$I.P1 * database$turnstile_marip
 Y_P1_mar_peak <- database$I.P1 * database$turnstile_marip * periodo_punta
 
 #Dataframe
-data.all <- data.frame(database$TEXP, database$L.m., database$DET, database$I.P1,Y_P1_peak, Y_P1_marip, Y_resto, database$NI)
-names(data.all) <- c("texp","largo","detenciones","Y_P1","Y_P1_peak","Y_P1_marip","Y_resto","NI")
+data.all <- data.frame(database$TEXP, database$L.m., database$DET, database$I.P1,Y_P1_peak, Y_resto, database$NI, NI_peak)
+names(data.all) <- c("texp","largo","detenciones","Y_P1","Y_P1_peak","Y_resto","NI","NI_peak")
 
 modelo_05 <- lm(as.formula("texp~."), data = data.all)
 summary(modelo_05)
 ```
 
 ### Modelo 6
-El modelo 6 es idéntico al Modelo 5, pero se desagrega aún más la demanda de la puerta 1, considerando la demanda de paradero normal y zona paga, y agregando todo el resto.
+El modelo 6 es idéntico al Modelo 5, pero se agrega una variable dummy por aquellas expediciones que utilizan torniquete mariposa multiplicado por la demanda de la puerta 1.
+
+$T = c + t_{L} \cdot L + t_{s}\cdot S + \Big( t_{Y} + t_{Y}^{'} \cdot \tau_{peak} + t_{Y}^{''} \cdot \tau_{marip} \Big) \cdot Y_{P1} + t_{Y}^{'''} \cdot Y_{resto} + \Big( t_{I} + t_{I}^{'} \cdot \tau_{peak}\Big) \cdot N_{I}$
 
 ```{r Modelo6, echo=FALSE}
 
-Y_P1_PN_peak <- database$I.PN.P1 * periodo_punta
-Y_P1_PN_marip <- database$I.PN.P1 * database$turnstile_marip
-Y_P1_PN_mar_peak <- database$I.PN.P1 * database$turnstile_marip * periodo_punta
+#Demanda por el resto de las puertas
+Y_resto <- database$I.P2 + database$I.P3 + database$I.P4
 
-Y_P1_ZP_peak <- database$I.ZP.P1 * periodo_punta
-Y_P1_ZP_marip <- database$I.ZP.P1 * database$turnstile_marip
-Y_P1_ZP_mar_peak <- database$I.ZP.P1 * database$turnstile_marip * periodo_punta
+Y_P1_peak <- database$I.P1 * periodo_punta
+Y_P1_marip <- database$I.P1 * database$turnstile_marip
 
 #Dataframe
-data.all <- data.frame(database$TEXP, 
-                       database$L.m., 
-                       database$DET, 
-                       database$I.PN.P1,
-                       Y_P1_PN_peak,
-                       Y_P1_PN_marip,
-                       Y_P1_PN_mar_peak,
-                       database$I.ZP.P1,
-                       Y_P1_ZP_peak,
-                       Y_P1_ZP_marip,
-                       Y_P1_ZP_mar_peak,
-                       Y_resto,
-                       database$NI)
-
-
-names(data.all) <- c("texp",
-                     "largo",
-                     "detenciones",
-                     "Y_PN_P1",
-                     "Y_PN_P1_peak",
-                     "Y_PN_P1_marip",
-                     "Y_PN_P1_marip_peak",
-                     "Y_ZP_P1",
-                     "Y_ZP_P1_peak",
-                     "Y_ZP_P1_marip",
-                     "Y_ZP_P1_marip_peak",
-                     "Y_resto",
-                     "NI")
+data.all <- data.frame(database$TEXP, database$L.m., database$DET, database$I.P1,Y_P1_peak, Y_P1_marip, Y_resto, database$NI, NI_peak)
+names(data.all) <- c("texp","largo","detenciones","Y_P1","Y_P1_peak","Y_P1_marip","Y_resto","NI","NI_peak")
 
 modelo_06 <- lm(as.formula("texp~."), data = data.all)
 summary(modelo_06)
@@ -468,44 +767,280 @@ summary(modelo_06)
 
 ### Modelo 7
 
-Modelo idéntico al modelo 6, salvo que se eliminan variables estadísticamente no significativas además del tiempo extra por uso de torniquete mariposa en periodo peak.
+Modelo idéntico al modelo 6, salvo que se agrega una variable por uso de torniquete mariposa durante el periodo punta, $i.e.$:
+
+$T = c + t_{L} \cdot L + t_{s}\cdot S + \Big( t_{Y} + t_{Y}^{'} \cdot \tau_{peak} + t_{Y}^{''} \cdot \tau_{marip} + t_{Y}^{'''} \cdot \tau_{peak} \cdot \tau_{marip} \Big) \cdot Y_{P1} + t_{Y}^{''''} \cdot Y_{resto} + \Big( t_{I} + t_{I}^{'} \cdot \tau_{peak}\Big) \cdot N_{I}$
 
 ```{r Modelo7, echo=FALSE}
 
+#Creando variables adicionales
+Y_P1_mar_peak <- database$I.P1 * database$turnstile_marip * periodo_punta
+
+#Dataframe
+data.all <- data.frame(database$TEXP, 
+                       database$L.m., 
+                       database$DET, 
+                       database$I.P1,
+                       Y_P1_peak,
+                       Y_P1_marip,
+                       Y_P1_mar_peak,
+                       Y_resto,
+                       database$NI,
+                       NI_peak)
+
+
+names(data.all) <- c("texp",
+                     "largo",
+                     "detenciones",
+                     "Y_P1",
+                     "Y_P1_peak",
+                     "Y_P1_marip",
+                     "Y_P1_marip_peak",
+                     "Y_resto",
+                     "NI",
+                     "NI_peak")
+
+modelo_07 <- lm(as.formula("texp~."), data = data.all)
+summary(modelo_07)
+```
+
+### Modelo 8
+
+Debido al valor negativo en el tiempo extra por transferencia de pasajeros ante la presencia de torniquete mariposa en periodo punta, el Modelo 8 corresponde a una extensión del Modelo 7, sin embargo se controla por aquellas expediciones que se hacen en buses con torniquete de tres brazos, $i.e$:
+
+$T = c + t_{L} \cdot L + t_{s}\cdot S + \Big( t_{Y} + t_{Y}^{'} \cdot \tau_{peak} + t_{Y}^{''} \cdot \tau_{marip} + t_{Y}^{'''} \cdot \tau_{3B} + t_{Y}^{''''} \cdot \tau_{peak} \cdot \tau_{marip} \Big) \cdot Y_{P1} + t_{Y}^{'''''} \cdot Y_{resto} + \Big( t_{I} + t_{I}^{'} \cdot \tau_{peak}\Big) \cdot N_{I}$
+
+```{r Modelo8, echo=FALSE}
+#Adding 3B turnstile variable
+database$turnstile_3b <- 0
+ind_3b <- which(database$n_turnstile==0 & database$turnstile_marip == 0)
+database$turnstile_3b[ind_3b] <- 1
+
+#Adding turnstile variable during peak periods
+Y_P1_3b <- database$I.P1 * database$turnstile_3b
+
+
+#Dataframe
+data.all <- data.frame(database$TEXP, 
+                       database$L.m., 
+                       database$DET, 
+                       database$I.P1,
+                       Y_P1_peak,
+                       Y_P1_marip,
+                       Y_P1_3b,
+                       Y_P1_mar_peak,
+                       Y_resto,
+                       database$NI,
+                       NI_peak)
+
+
+names(data.all) <- c("texp",
+                     "largo",
+                     "detenciones",
+                     "Y_P1",
+                     "Y_P1_peak",
+                     "Y_P1_marip",
+                     "Y_P1_3B",
+                     "Y_P1_marip_peak",
+                     "Y_resto",
+                     "NI",
+                     "NI_peak")
+
+modelo_08 <- lm(as.formula("texp~."), data = data.all)
+summary(modelo_08)
+```
+
+
+### Modelo 9
+
+Corresponde al Modelo 8, pero sin considerar una variable extra de demora por transferencia de pasajeros durante los periodos punta $i.e$:
+
+$T = c + t_{L} \cdot L + t_{s}\cdot S + \Big( t_{Y} + t_{Y}^{'} \cdot \tau_{marip} + t_{Y}^{''} \cdot \tau_{3B} + t_{Y}^{'''} \cdot \tau_{peak} \cdot \tau_{marip} \Big) \cdot Y_{P1} + t_{Y}^{''''} \cdot Y_{resto} + \Big( t_{I} + t_{I}^{'} \cdot \tau_{peak}\Big) \cdot N_{I}$
+
+```{r Modelo9, echo=FALSE}
+#Dataframe
+data.all <- data.frame(database$TEXP, 
+                       database$L.m., 
+                       database$DET, 
+                       database$I.P1,
+                       Y_P1_marip,
+                       Y_P1_3b,
+                       Y_P1_mar_peak,
+                       Y_resto,
+                       database$NI,
+                       NI_peak)
+
+
+names(data.all) <- c("texp",
+                     "largo",
+                     "detenciones",
+                     "Y_P1",
+                     "Y_P1_marip",
+                     "Y_P1_3B",
+                     "Y_P1_marip_peak",
+                     "Y_resto",
+                     "NI",
+                     "NI_peak")
+
+modelo_09 <- lm(as.formula("texp~."), data = data.all)
+summary(modelo_09)
+```
+
+## Modelo 10
+Corresponde a una desagregación del Modelo 9 en la demanda. Se considera que el efecto principal en transferencia de pasajeros como también los tiempos de demoras extra por uso de torniquete ocurren la puerta 1 en paraderos normales. Se agrega el resto de la demanda, $i.e.$:
+
+$T = c + t_{L} \cdot L + t_{s}\cdot S + \Big( t_{Y} + t_{Y}^{'} \cdot \tau_{marip} + t_{Y}^{''} \cdot \tau_{3B} + t_{Y}^{'''} \cdot \tau_{peak} \cdot \tau_{marip} \Big) \cdot Y_{PN_{1}} + t_{Y}^{''''} \cdot Y_{resto} + \Big( t_{I} + t_{I}^{'} \cdot \tau_{peak}\Big) \cdot N_{I}$
+
+```{r Modelo10, echo=FALSE}
+
+#Creando variables necesarias (relacionadas a demanda en puerta 1 para paradero normal)
+Y_PN_P1_marip <- database$I.PN.P1 * database$turnstile_marip
+Y_PN_P1_3B <- database$I.PN.P1 * database$turnstile_3b
+Y_PN_P1_marip_peak <- database$I.PN.P1 * database$turnstile_marip * periodo_punta
+
 #Demanda por el resto de las puertas
-Y_resto <- database$I.P2 + database$I.P3 + database$I.P4 + database$I.ZP.P1
-
-Y_P1_PN_peak <- database$I.PN.P1 * periodo_punta
-Y_P1_PN_marip <- database$I.PN.P1 * database$turnstile_marip
-Y_P1_PN_mar_peak <- database$I.PN.P1 * database$turnstile_marip * periodo_punta
-
-Y_P1_ZP_peak <- database$I.ZP.P1 * periodo_punta
-Y_P1_ZP_marip <- database$I.ZP.P1 * database$turnstile_marip
-Y_P1_ZP_mar_peak <- database$I.ZP.P1 * database$turnstile_marip * periodo_punta
+Y_resto_zp_p1 <- database$I.P2 + database$I.P3 + database$I.P4 + database$I.ZP.P1
 
 #Dataframe
 data.all <- data.frame(database$TEXP, 
                        database$L.m., 
                        database$DET, 
                        database$I.PN.P1,
-                       Y_P1_PN_peak,
-                       Y_P1_PN_marip,
-                       Y_resto,
-                       database$NI)
+                       Y_PN_P1_marip,
+                       Y_PN_P1_3B,
+                       Y_PN_P1_marip_peak,
+                       Y_resto_zp_p1,
+                       database$NI,
+                       NI_peak)
 
 
 names(data.all) <- c("texp",
                      "largo",
                      "detenciones",
-                     "Y_PN_P1",
-                     "Y_PN_P1_peak",
-                     "Y_PN_P1_marip",
+                     "Y_P1_PN",
+                     "Y_P1_PN_marip",
+                     "Y_P1_PN_3B",
+                     "Y_P1_PN_marip_peak",
                      "Y_resto",
-                     "NI")
+                     "NI",
+                     "NI_peak")
 
-modelo_07 <- lm(as.formula("texp~."), data = data.all)
-summary(modelo_07)
+modelo_10 <- lm(as.formula("texp~."), data = data.all)
+summary(modelo_10)
 ```
 
+
+### Modelo 11
+
+Modelo corresponde a una extensión del Modelo 10, considerando demoras o ahorros de tiempo en tiempo de crucero por periodo del día. En particular se considera Periodo 3, Periodo PMA, y Periodo 5. Es decir:
+
+$T = c + \Big( t_{L} + t_{L}^{'} \cdot \tau_{P3} + t_{L}^{''} \cdot \tau_{PMA} + t_{L}^{'''} \cdot \tau_{P5} \Big) \cdot L + t_{s}\cdot S + \Big( t_{Y} + t_{Y}^{'} \cdot \tau_{marip} + t_{Y}^{''} \cdot \tau_{3B} + t_{Y}^{'''} \cdot \tau_{peak} \cdot \tau_{marip} \Big) \cdot Y_{PN_{1}} + t_{Y}^{''''} \cdot Y_{resto} + \Big( t_{I} + t_{I}^{'} \cdot \tau_{peak}\Big) \cdot N_{I}$
+
+```{r Modelo11, echo=FALSE}
+
+#Dummy por periodo en tiempo de crucero
+largo_P3 <- database$L.m. * period$P3
+largo_PMA <- database$L.m. * period$P4
+largo_P5 <- database$L.m. * period$P5
+
+#Creando variables necesarias (relacionadas a demanda en puerta 1 para paradero normal)
+Y_PN_P1_marip <- database$I.PN.P1 * database$turnstile_marip
+Y_PN_P1_3B <- database$I.PN.P1 * database$turnstile_3b
+Y_PN_P1_marip_peak <- database$I.PN.P1 * database$turnstile_marip * periodo_punta
+
+#Demanda por el resto de las puertas
+Y_resto_zp_p1 <- database$I.P2 + database$I.P3 + database$I.P4 + database$I.ZP.P1
+
+#Dataframe
+data.all <- data.frame(database$TEXP, 
+                       database$L.m.,
+                       largo_P3,
+                       largo_PMA,
+                       largo_P5,
+                       database$DET, 
+                       database$I.PN.P1,
+                       Y_PN_P1_marip,
+                       Y_PN_P1_3B,
+                       Y_PN_P1_marip_peak,
+                       Y_resto_zp_p1,
+                       database$NI,
+                       NI_peak)
+
+
+names(data.all) <- c("texp",
+                     "largo",
+                     "largo_P3",
+                     "largo_PMA",
+                     "largo_P5",
+                     "detenciones",
+                     "Y_P1_PN",
+                     "Y_P1_PN_marip",
+                     "Y_P1_PN_3B",
+                     "Y_P1_PN_marip_peak",
+                     "Y_resto",
+                     "NI",
+                     "NI_peak")
+
+modelo_11 <- lm(as.formula("texp~."), data = data.all)
+summary(modelo_11)
+```
+
+### Modelo 12
+
+Modelo 12 corresponde a una simplificación del modelo anterior, incorporando una demora o ahorro extra de tiempo en la componente de crucero solo en caso de que la expedición se haga en periodo punta (mañana o tarde), $i.e.$:
+
+$T = c + \Big( t_{L} + t_{L}^{'} \cdot \tau_{Peak} \Big) \cdot L + t_{s}\cdot S + \Big( t_{Y} + t_{Y}^{'} \cdot \tau_{marip} + t_{Y}^{''} \cdot \tau_{3B} + t_{Y}^{'''} \cdot \tau_{peak} \cdot \tau_{marip} \Big) \cdot Y_{PN_{1}} + t_{Y}^{''''} \cdot Y_{resto} + \Big( t_{I} + t_{I}^{'} \cdot \tau_{peak}\Big) \cdot N_{I}$
+
+```{r Modelo12, echo=FALSE}
+#Dummy por periodo en tiempo de crucero
+largo_Peak <- database$L.m. * periodo_punta
+
+#Creando variables necesarias (relacionadas a demanda en puerta 1 para paradero normal)
+Y_PN_P1_marip <- database$I.PN.P1 * database$turnstile_marip
+Y_PN_P1_3B <- database$I.PN.P1 * database$turnstile_3b
+Y_PN_P1_marip_peak <- database$I.PN.P1 * database$turnstile_marip * periodo_punta
+
+#Demanda por el resto de las puertas
+Y_resto_zp_p1 <- database$I.P2 + database$I.P3 + database$I.P4 + database$I.ZP.P1
+
+#Dataframe
+data.all <- data.frame(database$TEXP, 
+                       database$L.m.,
+                       largo_Peak,
+                       database$DET, 
+                       database$I.PN.P1,
+                       Y_PN_P1_marip,
+                       Y_PN_P1_3B,
+                       Y_PN_P1_marip_peak,
+                       Y_resto_zp_p1,
+                       database$NI,
+                       NI_peak)
+
+
+names(data.all) <- c("texp",
+                     "largo",
+                     "largo_Peak",
+                     "detenciones",
+                     "Y_P1_PN",
+                     "Y_P1_PN_marip",
+                     "Y_P1_PN_3B",
+                     "Y_P1_PN_marip_peak",
+                     "Y_resto",
+                     "NI",
+                     "NI_peak")
+
+modelo_12 <- lm(as.formula("texp~."), data = data.all)
+summary(modelo_12)
+```
+
+### Modelo 13
+
+A continuación se desagrega aún más la demanda, generando las variables de tiempo extra por demanda tanto para aquellas personas que ingresan por la puerta 1 en paradero normal pagando, como para aquellos que lo hacen evadiendo, $i.e.$:
+
+
+
+```{r Modelo13, echo=FALSE}
+
+```
 
 
