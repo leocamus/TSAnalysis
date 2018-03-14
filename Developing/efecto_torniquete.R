@@ -408,9 +408,19 @@ write.table(fiscalizacion, file = "BBDD_2016_consolidada_2.csv", row.names = FAL
 
 #Setting working space
 setwd("/Users/diego/Desktop/Evasion/01_analisis/03_datos/08_datavel/")
-datavel <- read.csv(file = "datavel_2016.csv", header = FALSE, sep = ";")
-datavel <- datavel[,-5]
-names(datavel) <- c("Patente","COD_SINRUTA","PosIni","PosFin")
+
+datavel_2017 <- read.csv(file = "datavel_2017.csv", header = FALSE, sep = ";")
+datavel_2016 <- read.csv(file = "datavel_2016.csv", header = FALSE, sep = ";")
+
+datavel_2017 <- datavel_2017[,-5]
+datavel_2016 <- datavel_2016[,-5]
+
+names(datavel_2016) <- c("Patente","COD_SINRUTA","PosIni","PosFin")
+names(datavel_2017) <- c("Patente","COD_SINRUTA","PosIni","PosFin")
+
+datavel <- rbind(datavel_2016, datavel_2017)
+
+write.table(datavel, file="datavel.csv", row.names=FALSE, sep = ";")
 
 #Adding time and date variables
 datavel$PosIni <- as.POSIXct(datavel$PosIni, format= "%Y-%m-%d %H:%M:%S")
@@ -423,6 +433,8 @@ datavel$PosFin <- NULL
 datavel$Patente <- gsub(" ","",datavel$Patente)
 datavel$Patente <- toupper(datavel$Patente)
 datavel$Patente <- as.factor(datavel$Patente)
+
+
 
 
 #Setting working space

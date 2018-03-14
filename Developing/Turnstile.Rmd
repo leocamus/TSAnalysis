@@ -222,8 +222,8 @@ evasion$PUERTA.NUMERO[215479:215485] <- 3
 evasion$PUERTA.NUMERO[234874:234882] <- 3
 
 
-#Umbral (pax/detención) que define la demanda para la cual se visibiliza el efecto del torniquete
-X <- 5
+#Umbral X (pax/detención) que define la demanda para la cual se visibiliza el efecto del torniquete
+X <- 7
 
 #Collapsing evasion dataset by expedition
 dataframe <- data.table(evasion)
@@ -279,7 +279,6 @@ if(nrow(dataframe[duplicated(dataframe$EXP.ID) | duplicated(dataframe$EXP.ID, fr
 #Deleting rare cases
 dataframe$DET.ID <- apply(dataframe[,5:9], 1, function(x){ifelse(sum(!is.na(x[2:5])) != x[1],1,0)})
 test <- dataframe[which(dataframe$DET.ID==1),]
-
 dataframe <- dataframe[-which(dataframe$DET.ID==1),]
 
 #Se calcula expediciones con diferente número de detenciones por puertas
@@ -287,134 +286,186 @@ exp_n2 <- dataframe[which(dataframe$Puertas==2),]
 exp_n3 <- dataframe[which(dataframe$Puertas==3),]
 exp_n4 <- dataframe[which(dataframe$Puertas==4),]
 
-
 exp_n2_dist <- exp_n2[which(apply(exp_n2[,c(6,7)], 1, function(x){length(which(diff(x) !=0))}) != 0),]
 exp_n3_dist <- exp_n3[which(apply(exp_n3[,c(6,7,8)], 1, function(x){length(which(diff(x) !=0))}) != 0),]
 exp_n4_dist <- exp_n4[which(apply(exp_n4[,c(6,7,8,9)], 1, function(x){length(which(diff(x) !=0))}) != 0),]
-
 
 exp_n2_dist$dif <- apply(exp_n2_dist[,c(6,7)], 1, function(x){max(abs(diff(x)))})
 exp_n3_dist$dif <- apply(exp_n3_dist[,c(6,7,8)], 1, function(x){max(abs(diff(x)))})
 exp_n4_dist$dif <- apply(exp_n4_dist[,c(6,7,8,9)], 1, function(x){max(abs(diff(x)))})
 
 
+#Observaciones a eliminar
+dataframe_dif <- rbind(exp_n2_dist, exp_n3_dist, exp_n4_dist)
+dataframe <- dataframe[-which(dataframe$EXP.ID %in% dataframe_dif$EXP.ID),]
 
 
+#Adding turnstile information
+dataframe <- merge(dataframe, torn_marip, by= "Patente", all.x = TRUE)
+dataframe <- merge(dataframe, torniquete, by= "Patente", all.x = TRUE)
+
+#Computing number of expedition with turnstile
+#Turnstile during the expedition?
+dataframe$turnstile[is.na(dataframe$Instalacion) & is.na(dataframe$Fecha_mariposa)] <- 0
+dataframe$turnstile_marip[is.na(dataframe$Instalacion) & is.na(dataframe$Fecha_mariposa)] <- 0
+
+#Indexes
+ind_na <- which(is.na(dataframe$turnstile))
 
 
+#Turnstile during the expedition?
+dataframe$turnstile[ind_na] <- ifelse(dataframe$FECHA[ind_na] > pmin(dataframe$Fecha_mariposa[ind_na],dataframe$Instalacion[ind_na],na.rm = TRUE),1,0)
+
+#Turnstile during the expedition? 2017 style
+dataframe$turnstile_marip[ind_na] <- ifelse(dataframe$FECHA[ind_na] > dataframe$Fecha_mariposa[ind_na],1,0)
+dataframe$turnstile_marip[is.na(dataframe$turnstile_marip)] <- 0
+```
+
+En el siguiente paso se obtiene el tiempo de viaje de cada una de las expediciones junto con el código de TS, su sentido y el largo del recorrido, para esto se hace un merge por día, servicio, patente y hora de inicio de fiscalización (+- 10 min) con LBS.
+
+```{r include=FALSE}
+#Setting working space
+setwd("/Users/diego/Desktop/Evasion/01_analisis/03_datos/05_LBS/")
+
+lbs <- read.csv(file = "processed_lbs.csv", header = TRUE, sep = ";")
+lbs$Inicio <- times(as.character(lbs$Inicio))
+lbs$Fecha <- as.Date(lbs$Fecha)
+names(lbs)[7] <- "largo_ruta"
 
 
+#Changing variables format
+dataframe$HORA.INICIO <- times(paste(dataframe$HORA.INICIO,":00",sep = ""))
+dataframe$FECHA <- as.Date(dataframe$FECHA)
+
+#Adding upperbound and lowerbound
+dataframe$UpperBound <- dataframe$HORA.INICIO + "00:10:00"
+dataframe$LowerBound <- dataframe$HORA.INICIO - "00:10:00"
+
+#Merge between fiscalizacion and LBS
+fiscalizacion <- sqldf('SELECT dataframe.*, lbs.TEXP, lbs.Periodo, lbs.largo_ruta, lbs.Sentido, lbs.Servicio
+                       FROM dataframe 
+                       LEFT JOIN lbs 
+                       ON lbs.Patente = dataframe.Patente
+                       AND lbs.Fecha = dataframe.FECHA
+                       AND lbs.Inicio BETWEEN dataframe.LowerBound AND dataframe.UpperBound')
+
+names(fiscalizacion)[ncol(fiscalizacion)] <- "COD_TS"
+
+fiscalizacion <- fiscalizacion[!is.na(fiscalizacion$TEXP),]
+nocurr <- data.frame(table(fiscalizacion$EXP.ID))
+nocurr <- nocurr[which(nocurr$Freq > 1),]
+
+#Deleting duplicates
+fiscalizacion <- fiscalizacion[-which(fiscalizacion$EXP.ID %in% nocurr$Var1),]
 
 
+#Adding no turnstile usage as a variable
+fiscalizacion$n_turnstile <- 0
+fiscalizacion$n_turnstile[which(fiscalizacion$turnstile==0)] <- 1
 
-fields = c("field1","field2")
-
-
-dataframe2 <- data.table(evasion)
-dataframe2 <- dataframe2[ , c("1","2") := list(sum(INGRESAN),sum(NO.VALIDAN)),
-                         by = FECHA]
-
-
-
-dataframe2 <- dataframe2[, .N, by = list(FECHA,Patente,SERVICIO,HORA.INICIO)]
+#removing lbs
+rm(lbs)
+```
 
 
+Merge between "DATAVEL" and Fiscalizacion para obtener código arena (COD_SINRUTA).
+
+```{r}
+
+#Setting working space
+setwd("/Users/diego/Desktop/Evasion/01_analisis/03_datos/08_datavel/")
+
+datavel <- read.csv(file = "datavel.csv", header = TRUE, sep = ";")
+
+#Adding time and date variables
+datavel$PosIni <- as.POSIXct(datavel$PosIni, format= "%Y-%m-%d %H:%M:%S")
+datavel$PosFin <- as.POSIXct(datavel$PosFin, format= "%Y-%m-%d %H:%M:%S")
+
+datavel$Date <- as.Date(datavel$PosIni)    
+datavel$Inicio <- times(strftime(datavel$PosIni, format="%H:%M:%S"))
+datavel$PosIni <- NULL
+datavel$PosFin <- NULL
+datavel$Patente <- gsub(" ","",datavel$Patente)
+datavel$Patente <- toupper(datavel$Patente)
+datavel$Patente <- as.factor(datavel$Patente)
+
+#Merge between fiscalizacion and DATAVEL
+data_frame <- sqldf('SELECT fiscalizacion.*, datavel.COD_SINRUTA 
+                       FROM fiscalizacion 
+                       LEFT JOIN datavel 
+                       ON datavel.Patente = fiscalizacion.Patente
+                       AND datavel.Date = fiscalizacion.FECHA
+                       AND datavel.Inicio BETWEEN fiscalizacion.LowerBound AND fiscalizacion.UpperBound')
+
+data_frame <- data_frame[!is.na(data_frame$COD_SINRUTA),]
+nocurr <- data.frame(table(data_frame$EXP.ID))
+nocurr <- nocurr[which(nocurr$Freq > 1),]
+
+#Deleting duplicates
+data_frame <- data_frame[-which(data_frame$EXP.ID %in% nocurr$Var1),]
+
+#removing datavel
+rm(datavel)
+```
 
 
+A continuación se realiza el merge de la base de datos con un diccionario que traduce código arena (cod_sinruta) a código transcad (route_name) ya que este último es el código usado por lo shapes de las rutas, usado para el cálculo de intersecciones semaforizadas.
+
+```{r}
+#Setting working space
+setwd("/Users/diego/Desktop/Evasion/01_analisis/03_datos/")
+
+diccionario <- read.csv(file = "diccionario_arena_tcad.csv", header = TRUE, sep = ";")
+diccionario$Manual[is.na(diccionario$Manual)] <- 0
+diccionario$Código.TCAD <- as.character(diccionario$Código.TCAD)
+diccionario$Código.Arena <- as.character(diccionario$Código.Arena)
+
+#Deleting white spaces and all to upper
+diccionario$Código.TCAD <- gsub(" ","",diccionario$Código.TCAD)
+diccionario$Código.Arena <- gsub(" ","",diccionario$Código.Arena)
+diccionario$Código.TCAD <- toupper(diccionario$Código.TCAD)
+diccionario$Código.Arena <- toupper(diccionario$Código.Arena)
+data_frame$COD_SINRUTA <- gsub(" ","",data_frame$COD_SINRUTA)
+data_frame$COD_SINRUTA <- toupper(data_frame$COD_SINRUTA)
 
 
-#Collapsing evasion dataset by expedition
-dataframe2 <- data.table(evasion)
-dataframe2 <- dataframe2[, c("N.P",
-                             "DET1",
-                             "DET2",
-                             "DET3",
-                             "DET4",
-                             "DET",
-                             "DET.ESP.PN1",
-                             "DET.ESP.ZP1",
-                             "Y",
-                             "EV",
-                             "I.NO.EFECT.P1.PN",
-                             "I.EFECT.P1.PN",
-                             "I.REM.P1.PN",
-                             "I.NO.EFECT.P1.ZP",
-                             "I.EFECT.P1.ZP",
-                             "I.REM.P1.ZP",
-                             "I.PN",
-                             "I.ZP",
-                             "I.P1",
-                             "I.P2",
-                             "I.P3",
-                             "I.P4",
-                             "I.PN.P1",
-                             "I.PN.P2",
-                             "I.PN.P3",
-                             "I.PN.P4",
-                             "I.ZP.P1",
-                             "I.ZP.P2",
-                             "I.ZP.P3",
-                             "I.ZP.P4",
-                             "I.P.PN.P1",
-                             "I.P.PN.P2",
-                             "I.P.PN.P3",
-                             "I.P.PN.P4",
-                             "I.E.PN.P1",
-                             "I.E.PN.P2",
-                             "I.E.PN.P3",
-                             "I.E.PN.P4",
-                             "TRI") := list(unique(NUMERO.DE.PUERTAS),
-                                            table(PUERTA.NUMERO)[1],
-                                            table(PUERTA.NUMERO)[2],
-                                            table(PUERTA.NUMERO)[3],
-                                            table(PUERTA.NUMERO)[4],
-                                            max(table(PUERTA.NUMERO)),
-                                            length(INGRESAN[which(TP == "P" & PUERTA.NUMERO == 1 & INGRESAN >= X)]),
-                                            length(INGRESAN[which(TP == "Z" & PUERTA.NUMERO == 1 & INGRESAN >= X)]),
-                                            sum(INGRESAN),
-                                            sum(NO.VALIDAN),
-                                            sum(INGRESAN[which(TP == "P" & PUERTA.NUMERO == 1 & INGRESAN < X)]),
-                                            sum(INGRESAN[which(TP == "P" & PUERTA.NUMERO == 1 & INGRESAN >= X)]),
-                                            sum(INGRESAN[which(TP == "P" & PUERTA.NUMERO == 1 & INGRESAN >= X)] - (X-1)),
-                                            sum(INGRESAN[which(TP == "Z" & PUERTA.NUMERO == 1 & INGRESAN < X)]),
-                                            sum(INGRESAN[which(TP == "Z" & PUERTA.NUMERO == 1 & INGRESAN >= X)]),
-                                            sum(INGRESAN[which(TP == "Z" & PUERTA.NUMERO == 1 & INGRESAN >= X)] - (X-1)),
-                                            sum(INGRESAN[which(TP == "P")]),
-                                            sum(INGRESAN[which(TP == "Z")]),
-                                            sum(INGRESAN[which(PUERTA.NUMERO == 1)]),
-                                            sum(INGRESAN[which(PUERTA.NUMERO == 2)]),
-                                            sum(INGRESAN[which(PUERTA.NUMERO == 3)]),
-                                            sum(INGRESAN[which(PUERTA.NUMERO == 4)]),
-                                            sum(INGRESAN[which(TP == "P" & PUERTA.NUMERO == 1)]),
-                                            sum(INGRESAN[which(TP == "P" & PUERTA.NUMERO == 2)]),
-                                            sum(INGRESAN[which(TP == "P" & PUERTA.NUMERO == 3)]),
-                                            sum(INGRESAN[which(TP == "P" & PUERTA.NUMERO == 4)]),
-                                            sum(INGRESAN[which(TP == "Z" & PUERTA.NUMERO == 1)]),
-                                            sum(INGRESAN[which(TP == "Z" & PUERTA.NUMERO == 2)]),
-                                            sum(INGRESAN[which(TP == "Z" & PUERTA.NUMERO == 3)]),
-                                            sum(INGRESAN[which(TP == "Z" & PUERTA.NUMERO == 4)]),
-                                            sum(INGRESAN[which(TP == "P" & PUERTA.NUMERO == 1)]) - sum(NO.VALIDAN[TP == "P" & PUERTA.NUMERO == 1]),
-                                            sum(INGRESAN[which(TP == "P" & PUERTA.NUMERO == 2)]) - sum(NO.VALIDAN[TP == "P" & PUERTA.NUMERO == 2]),
-                                            sum(INGRESAN[which(TP == "P" & PUERTA.NUMERO == 3)]) - sum(NO.VALIDAN[TP == "P" & PUERTA.NUMERO == 3]),
-                                            sum(INGRESAN[which(TP == "P" & PUERTA.NUMERO == 4)]) - sum(NO.VALIDAN[TP == "P" & PUERTA.NUMERO == 4]),
-                                            sum(NO.VALIDAN[TP == "P" & PUERTA.NUMERO == 1]),
-                                            sum(NO.VALIDAN[TP == "P" & PUERTA.NUMERO == 2]),
-                                            sum(NO.VALIDAN[TP == "P" & PUERTA.NUMERO == 3]),
-                                            sum(NO.VALIDAN[TP == "P" & PUERTA.NUMERO == 4]),
-                                            unique(TRI)),
-                         by= list(FECHA,Patente,SERVICIO,HORA.INICIO)][]
+#Merge between fiscalizacion database and dictionary 
+names(diccionario)[3] <- "COD_SINRUTA"
 
+#Asignando ruta feria
+data_frame$COD_SINRUTA[which(data_frame$Patente=="BJFX-66" & data_frame$HORA.INICIO=="11:23:00")] <- "T38706I"
+ind_01 <- which(data_frame$COD_SINRUTA == "T38701I")
+data_frame$COD_SINRUTA[ind_01] <- "T38700I"
+
+#Merge
+datamodelo <- join(data_frame,diccionario[,-ncol(diccionario)], by="COD_SINRUTA")
+
+#Missing values
+missing <- datamodelo[is.na(datamodelo$Código.TCAD),]
+datamodelo <- datamodelo[!is.na(datamodelo$Código.TCAD),]
+duplicados <- datamodelo[duplicated(datamodelo$EXP.ID) | duplicated(datamodelo$EXP.ID, fromLast = TRUE),]
+
+#Changing column name
+names(datamodelo)[ncol(datamodelo)] <- "ROUTE_NAME"
+
+#Deleting rare cases (between codes)
+#Keeping track of mismatches between ROUTE_NAME and COD_USU
+datamodelo$ROUTE_NAME2 <- unlist(lapply(strsplit(datamodelo$ROUTE_NAME, "_"), `[[`, 1))
+datamodelo$ROUTE_NAME3 <- substr(datamodelo$ROUTE_NAME2,1,4)
+datamodelo$COD_USU_SENTIDO <- paste(datamodelo$SERVICIO, substr(datamodelo$Sentido,1,1), sep = "")
+
+rare_cases <- datamodelo[which(datamodelo$ROUTE_NAME3 != datamodelo$COD_USU_SENTIDO),]
+
+#output
+datamodelo <- datamodelo[-which(datamodelo$ROUTE_NAME3 != datamodelo$COD_USU_SENTIDO),]
+
+write.table(datamodelo, file = paste("data_modelo_X",X,".csv",sep = ""), row.names = FALSE, sep = ";")
 ```
 
 
 
 
-
-
-
-
-
-Getting and editing signals dataframe
+Getting, editing and computing signals by expedition.
 ```{r Signals}
 
 #Options
@@ -432,30 +483,21 @@ signals$Desde <- as.Date(as.character(signals$Desde))
 signals$Hasta <- as.Date(as.character(signals$Hasta))
 signals <- signals[!duplicated(signals),]
 #duplicados_signal <- signals[duplicated(signals) | duplicated(signals, fromLast = TRUE),]
-```
 
-
-Getting and editing variables dataframe
-```{r Expedition times, echo=FALSE}
-#Setting working space
-setwd("/Users/diego/Desktop/Evasion/01_analisis/03_datos/07_Bases_consolidadas/")
-
-#Reading input files
-dataframe <- read.csv(file = "base_modelo.csv", header = TRUE, sep = ";")
 
 #Editing expedition dataframe
-dataframe$Código.TCAD <- as.character(dataframe$Código.TCAD)
-dataframe$Código.TCAD <- gsub(" ","",dataframe$Código.TCAD)
-dataframe$Código.TCAD <- toupper(dataframe$Código.TCAD)
-dataframe$Fecha <- as.Date(as.character(dataframe$Fecha))
-names(dataframe)[50] <- "CodTCAD"
+datamodelo$ROUTE_NAME <- as.character(datamodelo$ROUTE_NAME)
+datamodelo$ROUTE_NAME <- gsub(" ","",datamodelo$ROUTE_NAME)
+datamodelo$ROUTE_NAME <- toupper(datamodelo$ROUTE_NAME)
+
 
 #Merge between route and number of signals by date
-database <- sqldf('SELECT dataframe.*, signals.* 
-                  FROM dataframe 
+database <- sqldf('SELECT datamodelo.*, signals.NI
+                  FROM datamodelo 
                   LEFT JOIN signals 
-                  ON dataframe.CodTCAD = signals.ROUTE_NAME
-                  AND dataframe.Fecha BETWEEN signals.Desde AND signals.Hasta')
+                  ON datamodelo.ROUTE_NAME = signals.ROUTE_NAME
+                  AND datamodelo.FECHA BETWEEN signals.Desde AND signals.Hasta')
+
 
 #Getting NAs
 ind_na <- which(is.na(database$NI))
@@ -463,14 +505,10 @@ test_na <- database[ind_na,]
 
 #Deleting NAs
 database <- database[-ind_na,]
-
-#Keeping track of mismatches between ROUTE_NAME and COD_USU
-database$ROUTE_NAME2 <- unlist(lapply(strsplit(database$ROUTE_NAME, "_"), `[[`, 1))
-database$ROUTE_NAME3 <- substr(database$ROUTE_NAME2,1,4)
-database$COD_USU_SENTIDO <- paste(database$COD_USU, substr(database$Sentido,1,1), sep = "")
-
-rare_cases <- database[which(database$ROUTE_NAME3 != database$COD_USU_SENTIDO),]
 ```
+
+
+
 
 
 # Data Analysis
@@ -480,7 +518,7 @@ rare_cases <- database[which(database$ROUTE_NAME3 != database$COD_USU_SENTIDO),]
 texp_s <- database$TEXP
 demanda_total <- database$Y
 detenciones <- database$DET
-largo_m <- database$L.m.
+largo_m <- database$largo_ruta
 evasion_total <- database$EV
 NI <- database$NI
 
@@ -600,7 +638,7 @@ ggplot(texpedicion, aes(texpedicion$texp)) +
 
 ```{r Histograma Recorridos, echo=FALSE}
 #histogram for expedition time by turnstile usage
-lrecorridos <- data.frame(database$L.m.)
+lrecorridos <- data.frame(database$largo_ruta)
 names(lrecorridos) <- "l_recorridos"
 
 #Making plot
@@ -619,8 +657,13 @@ ggplot(lrecorridos, aes(x="", y=lrecorridos$l_recorridos)) +
 #Boxplot stats
 #a vector of length 5, containing the extreme of the lower whisker, the lower ‘hinge’, the median, the upper ‘hinge’ and the extreme of the upper whisker.
 boxplot.stats(lrecorridos$l_recorridos)
-
 ```
+
+
+
+
+
+
 
 
 # Travel time models
@@ -628,19 +671,209 @@ A continuación se crean modelos econométricos para estimar el tiempo medio de 
 
 ### Modelo 1
 
-El primer modelo es un modelo simple que incluye el largo del recorrido, el número de detenciones, la demanda total, y el número de intersecciones.
+El primer modelo es un modelo simple que incluye el largo del recorrido, el número de detenciones, la demanda total, y el número de intersecciones. No se agrega número de intersecciones, se contrla por ruta (cod usuario y sentido)
 
 $T = c + t_{L} \cdot L + t_{s}\cdot S + t_{Y}\cdot Y + t_{I}\cdot N_{I}$
 
 ```{r Modelo1, echo=FALSE}
 
-#Changing distance from meters to km
-database$L.m. <- database$L.m./1000
+rutas <- as.data.frame(model.matrix(~database$COD_USU_SENTIDO-1))
+names(rutas) <- substr(names(rutas),nchar(names(rutas)) - 3,nchar(names(rutas)))
 
-data.all <- data.frame(database$TEXP, database$L.m., database$DET, database$Y, database$NI)
+#Deleting route 101I
+rutas <- rutas[,-1]
+
+
+#Changing distance from meters to km
+database$largo_ruta <- database$largo_ruta/1000
+
+data.all <- data.frame(database$TEXP, database$largo_ruta, database$DET, database$Y, database$NI)
 names(data.all) <- c("texp","largo","detenciones","Y","NI")
+
+data.all <- cbind(data.all, rutas)
+
 modelo_01 <- lm(as.formula("texp~."), data = data.all)
 summary(modelo_01)
+test_summary <- data.frame(summary(modelo_01)[[4]])
+test_summary <- test_summary[5:nrow(test_summary),]
+
+ind_pvalor <- which(test_summary$Pr...t.. <= 0.05)
+
+
+rutas <- rutas[,ind_pvalor]
+
+data.all <- data.frame(database$TEXP, database$largo_ruta, database$DET, database$Y)
+names(data.all) <- c("texp","largo","detenciones","Y")
+
+data.all <- cbind(data.all, rutas)
+
+modelo_02 <- lm(as.formula("texp~."), data = data.all)
+summary(modelo_02)
+
+summary_02 <- data.frame(summary(modelo_02)[[4]])
+summary_02 <- summary_02[5:nrow(summary_02),]
+ind_pvalor_02 <- which(summary_02$Pr...t.. <= 0.05)
+rutas <- rutas[,ind_pvalor_02]
+
+
+
+data.all <- data.frame(database$TEXP, database$largo_ruta, database$DET, database$Y)
+names(data.all) <- c("texp","largo","detenciones","Y")
+
+data.all <- cbind(data.all, rutas)
+
+modelo_03 <- lm(as.formula("texp~."), data = data.all)
+summary(modelo_03)
+
+summary_03 <- data.frame(summary(modelo_03)[[4]])
+summary_03 <- summary_03[5:nrow(summary_03),]
+ind_pvalor_03 <- which(summary_03$Pr...t.. <= 0.05)
+rutas <- rutas[,ind_pvalor_03]
+
+
+
+data.all <- data.frame(database$TEXP, database$largo_ruta, database$DET, database$Y)
+names(data.all) <- c("texp","largo","detenciones","Y")
+
+data.all <- cbind(data.all, rutas)
+
+modelo_04 <- lm(as.formula("texp~."), data = data.all)
+summary(modelo_04)
+
+
+
+
+summary_04 <- data.frame(summary(modelo_04)[[4]])
+summary_04 <- summary_04[5:nrow(summary_04),]
+ind_pvalor_04 <- which(summary_04$Pr...t.. <= 0.05)
+rutas <- rutas[,ind_pvalor_04]
+
+data.all <- data.frame(database$TEXP, database$largo_ruta, database$DET, database$Y)
+names(data.all) <- c("texp","largo","detenciones","Y")
+
+data.all <- cbind(data.all, rutas)
+
+modelo_05 <- lm(as.formula("texp~."), data = data.all)
+summary(modelo_05)
+
+
+
+
+summary_05 <- data.frame(summary(modelo_05)[[4]])
+summary_05 <- summary_05[5:nrow(summary_05),]
+ind_pvalor_05 <- which(summary_05$Pr...t.. <= 0.05)
+rutas <- rutas[,ind_pvalor_05]
+
+data.all <- data.frame(database$TEXP, database$largo_ruta, database$DET, database$Y)
+names(data.all) <- c("texp","largo","detenciones","Y")
+
+data.all <- cbind(data.all, rutas)
+
+modelo_06 <- lm(as.formula("texp~."), data = data.all)
+summary(modelo_06)
+
+
+
+
+summary_06 <- data.frame(summary(modelo_06)[[4]])
+summary_06 <- summary_06[5:nrow(summary_06),]
+ind_pvalor_06 <- which(summary_06$Pr...t.. <= 0.05)
+rutas <- rutas[,ind_pvalor_06]
+
+data.all <- data.frame(database$TEXP, database$largo_ruta, database$DET, database$Y)
+names(data.all) <- c("texp","largo","detenciones","Y")
+
+data.all <- cbind(data.all, rutas)
+
+modelo_07 <- lm(as.formula("texp~."), data = data.all)
+summary(modelo_07)
+
+
+
+
+summary_07 <- data.frame(summary(modelo_07)[[4]])
+summary_07 <- summary_07[5:nrow(summary_07),]
+ind_pvalor_07 <- which(summary_07$Pr...t.. <= 0.05)
+rutas <- rutas[,ind_pvalor_07]
+
+data.all <- data.frame(database$TEXP, database$largo_ruta, database$DET, database$Y)
+names(data.all) <- c("texp","largo","detenciones","Y")
+
+data.all <- cbind(data.all, rutas)
+
+modelo_08 <- lm(as.formula("texp~."), data = data.all)
+summary(modelo_08)
+
+
+
+
+
+summary_08 <- data.frame(summary(modelo_08)[[4]])
+summary_08 <- summary_08[5:nrow(summary_08),]
+ind_pvalor_08 <- which(summary_08$Pr...t.. <= 0.05)
+rutas <- rutas[,ind_pvalor_08]
+
+data.all <- data.frame(database$TEXP, database$largo_ruta, database$DET, database$Y)
+names(data.all) <- c("texp","largo","detenciones","Y")
+
+data.all <- cbind(data.all, rutas)
+
+modelo_09 <- lm(as.formula("texp~."), data = data.all)
+summary(modelo_09)
+
+
+
+
+
+
+
+summary_09 <- data.frame(summary(modelo_09)[[4]])
+summary_09 <- summary_09[5:nrow(summary_09),]
+ind_pvalor_09 <- which(summary_09$Pr...t.. <= 0.05)
+rutas <- rutas[,ind_pvalor_09]
+
+data.all <- data.frame(database$TEXP, database$largo_ruta, database$DET, database$Y)
+names(data.all) <- c("texp","largo","detenciones","Y")
+
+data.all <- cbind(data.all, rutas)
+
+modelo_10 <- lm(as.formula("texp~."), data = data.all)
+summary(modelo_10)
+
+
+
+
+
+summary_10 <- data.frame(summary(modelo_10)[[4]])
+summary_10 <- summary_10[5:nrow(summary_10),]
+ind_pvalor_10 <- which(summary_10$Pr...t.. <= 0.05)
+rutas <- rutas[,ind_pvalor_10]
+
+data.all <- data.frame(database$TEXP, database$largo_ruta, database$DET, database$Y)
+names(data.all) <- c("texp","largo","detenciones","Y")
+
+data.all <- cbind(data.all, rutas)
+
+modelo_11 <- lm(as.formula("texp~."), data = data.all)
+summary(modelo_11)
+
+
+
+
+
+summary_11 <- data.frame(summary(modelo_11)[[4]])
+summary_11 <- summary_11[5:nrow(summary_11),]
+ind_pvalor_11 <- which(summary_11$Pr...t.. <= 0.05)
+rutas <- rutas[,ind_pvalor_11]
+
+data.all <- data.frame(database$TEXP, database$largo_ruta, database$DET, database$Y)
+names(data.all) <- c("texp","largo","detenciones","Y")
+
+data.all <- cbind(data.all, rutas)
+
+modelo_12 <- lm(as.formula("texp~."), data = data.all)
+summary(modelo_12)
+
 ```
 
 ### Modelo 2
@@ -658,7 +891,7 @@ periodo_punta <- period$P4+period$P9
 #Signals by period
 NI_peak <- periodo_punta * database$NI
 
-data.all <- data.frame(database$TEXP, database$L.m., database$DET, database$Y, database$NI, NI_peak)
+data.all <- data.frame(database$TEXP, database$largo_ruta, database$DET, database$Y, database$NI, NI_peak)
 names(data.all) <- c("texp","largo","detenciones","Y","NI", "NI_peak")
 modelo_02 <- lm(as.formula("texp~."), data = data.all)
 summary(modelo_02)
@@ -675,7 +908,7 @@ $T = c + t_{L} \cdot L + t_{s}\cdot S + \Big( t_{Y} + t_{Y}^{peak} \cdot \tau_{p
 Y_peak <- database$Y * periodo_punta
 
 #Dataframe
-data.all <- data.frame(database$TEXP, database$L.m., database$DET, database$Y,Y_peak, database$NI, NI_peak)
+data.all <- data.frame(database$TEXP, database$largo_ruta, database$DET, database$Y,Y_peak, database$NI, NI_peak)
 names(data.all) <- c("texp","largo","detenciones","Y","Y_Peak", "NI", "NI_peak")
 
 modelo_03 <- lm(as.formula("texp~."), data = data.all)
@@ -698,7 +931,7 @@ database$U_TRI[which(substr(database$Fecha,1,4) == "2017" & database$TRI == 4)] 
 
 #Dataframe
 data.all <- data.frame(database$TEXP, 
-                       database$L.m., 
+                       database$largo_ruta, 
                        database$U_TRI, 
                        database$DET, 
                        database$Y,
@@ -737,7 +970,7 @@ Y_P1_marip <- database$I.P1 * database$turnstile_marip
 Y_P1_mar_peak <- database$I.P1 * database$turnstile_marip * periodo_punta
 
 #Dataframe
-data.all <- data.frame(database$TEXP, database$L.m., database$DET, database$I.P1,Y_P1_peak, Y_resto, database$NI, NI_peak)
+data.all <- data.frame(database$TEXP, database$largo_ruta, database$DET, database$I.P1,Y_P1_peak, Y_resto, database$NI, NI_peak)
 names(data.all) <- c("texp","largo","detenciones","Y_P1","Y_P1_peak","Y_resto","NI","NI_peak")
 
 modelo_05 <- lm(as.formula("texp~."), data = data.all)
@@ -758,7 +991,7 @@ Y_P1_peak <- database$I.P1 * periodo_punta
 Y_P1_marip <- database$I.P1 * database$turnstile_marip
 
 #Dataframe
-data.all <- data.frame(database$TEXP, database$L.m., database$DET, database$I.P1,Y_P1_peak, Y_P1_marip, Y_resto, database$NI, NI_peak)
+data.all <- data.frame(database$TEXP, database$largo_ruta, database$DET, database$I.P1,Y_P1_peak, Y_P1_marip, Y_resto, database$NI, NI_peak)
 names(data.all) <- c("texp","largo","detenciones","Y_P1","Y_P1_peak","Y_P1_marip","Y_resto","NI","NI_peak")
 
 modelo_06 <- lm(as.formula("texp~."), data = data.all)
@@ -778,7 +1011,7 @@ Y_P1_mar_peak <- database$I.P1 * database$turnstile_marip * periodo_punta
 
 #Dataframe
 data.all <- data.frame(database$TEXP, 
-                       database$L.m., 
+                       database$largo_ruta, 
                        database$DET, 
                        database$I.P1,
                        Y_P1_peak,
@@ -822,7 +1055,7 @@ Y_P1_3b <- database$I.P1 * database$turnstile_3b
 
 #Dataframe
 data.all <- data.frame(database$TEXP, 
-                       database$L.m., 
+                       database$largo_ruta, 
                        database$DET, 
                        database$I.P1,
                        Y_P1_peak,
@@ -860,7 +1093,7 @@ $T = c + t_{L} \cdot L + t_{s}\cdot S + \Big( t_{Y} + t_{Y}^{'} \cdot \tau_{mari
 ```{r Modelo9, echo=FALSE}
 #Dataframe
 data.all <- data.frame(database$TEXP, 
-                       database$L.m., 
+                       database$largo_ruta, 
                        database$DET, 
                        database$I.P1,
                        Y_P1_marip,
@@ -903,7 +1136,7 @@ Y_resto_zp_p1 <- database$I.P2 + database$I.P3 + database$I.P4 + database$I.ZP.P
 
 #Dataframe
 data.all <- data.frame(database$TEXP, 
-                       database$L.m., 
+                       database$largo_ruta, 
                        database$DET, 
                        database$I.PN.P1,
                        Y_PN_P1_marip,
@@ -939,9 +1172,9 @@ $T = c + \Big( t_{L} + t_{L}^{'} \cdot \tau_{P3} + t_{L}^{''} \cdot \tau_{PMA} +
 ```{r Modelo11, echo=FALSE}
 
 #Dummy por periodo en tiempo de crucero
-largo_P3 <- database$L.m. * period$P3
-largo_PMA <- database$L.m. * period$P4
-largo_P5 <- database$L.m. * period$P5
+largo_P3 <- database$largo_ruta * period$P3
+largo_PMA <- database$largo_ruta * period$P4
+largo_P5 <- database$largo_ruta * period$P5
 
 #Creando variables necesarias (relacionadas a demanda en puerta 1 para paradero normal)
 Y_PN_P1_marip <- database$I.PN.P1 * database$turnstile_marip
@@ -953,7 +1186,7 @@ Y_resto_zp_p1 <- database$I.P2 + database$I.P3 + database$I.P4 + database$I.ZP.P
 
 #Dataframe
 data.all <- data.frame(database$TEXP, 
-                       database$L.m.,
+                       database$largo_ruta,
                        largo_P3,
                        largo_PMA,
                        largo_P5,
@@ -993,7 +1226,7 @@ $T = c + \Big( t_{L} + t_{L}^{'} \cdot \tau_{Peak} \Big) \cdot L + t_{s}\cdot S 
 
 ```{r Modelo12, echo=FALSE}
 #Dummy por periodo en tiempo de crucero
-largo_Peak <- database$L.m. * periodo_punta
+largo_Peak <- database$largo_ruta * periodo_punta
 
 #Creando variables necesarias (relacionadas a demanda en puerta 1 para paradero normal)
 Y_PN_P1_marip <- database$I.PN.P1 * database$turnstile_marip
@@ -1005,7 +1238,7 @@ Y_resto_zp_p1 <- database$I.P2 + database$I.P3 + database$I.P4 + database$I.ZP.P
 
 #Dataframe
 data.all <- data.frame(database$TEXP, 
-                       database$L.m.,
+                       database$largo_ruta,
                        largo_Peak,
                        database$DET, 
                        database$I.PN.P1,
@@ -1042,5 +1275,6 @@ A continuación se desagrega aún más la demanda, generando las variables de ti
 ```{r Modelo13, echo=FALSE}
 
 ```
+
 
 
