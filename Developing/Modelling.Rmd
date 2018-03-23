@@ -33,7 +33,6 @@ libs <- c("data.table",
 getLibraries(libs)
 ```
 
-
 ```{r Input, include=FALSE}
 #Setting working directory
 setwd("/Users/diego/Desktop/Evasion/01_analisis/03_datos/12_Bases_modelo/")
@@ -42,12 +41,40 @@ setwd("/Users/diego/Desktop/Evasion/01_analisis/03_datos/12_Bases_modelo/")
 database <- read.csv(file = "data_modelo_X5.csv", header = TRUE, sep = ";")
 ```
 
-```{r Changes, include=FALSE}
+```{r Variables, include=FALSE}
 
 #Cambiando unidad de medida de largo del recorrido (Kms.)
 database$largo_ruta <- database$largo_ruta/1000
 
+#One hot encoding for periods of time
+periodos <- as.data.frame(model.matrix(~database$Periodo-1))
+names(periodos) <- sprintf("P%s",3:10)
+periodo_punta <- periodos$P4 + periodos$P9
 
+#NI peak
+database$NI_peak <- database$NI * periodo_punta
+
+#Demanda en periodo punta
+database$Y_peak <- database$Y * periodo_punta
+
+#Agregando trimestre único
+database$U_TRI <- database$TRI
+database$U_TRI[which(substr(database$FECHA,1,4) == "2017" & database$TRI == 1)] <- 5
+database$U_TRI[which(substr(database$FECHA,1,4) == "2017" & database$TRI == 2)] <- 6
+database$U_TRI[which(substr(database$FECHA,1,4) == "2017" & database$TRI == 3)] <- 7
+database$U_TRI[which(substr(database$FECHA,1,4) == "2017" & database$TRI == 4)] <- 8
+
+#Variable por presencia de torniquete de tres brazos
+database$turnstile_3b <- 0
+database$turnstile_3b[which(database$turnstile==1 & database$turnstile_marip==0)] <- 1
+
+#Demanda con torniquete mariposa y de trez brazos en periodos punta.
+database$Y_peak_marip <- database$Y * periodo_punta * database$turnstile_marip
+database$Y_peak_3b <- database$Y * periodo_punta * database$turnstile_3b
+
+#Demanda con torniquete mariposa y torniquete de tres brazos.
+database$Y_marip <- database$Y * database$turnstile_marip
+database$Y_3b <- database$Y * database$turnstile_3b
 ```
 
 
@@ -74,18 +101,141 @@ summary(modelo_01)
 
 ### Modelo 2
 
-Este modelo corresponde a una extensión del modelo anterior, pero se considera un tiempo extra por demora (o ahorro) en intersecciones semaforizadas cuando el viaje se hace en periodos punta.
+Este modelo corresponde a una extensión del modelo anterior, pero se considera un tiempo extra por demora (o ahorro) en intersecciones semaforizadas y por la demanda cuando el viaje se hace en periodos punta (punta mañana o punta tarde).
+
+$T = c + t_{L} \cdot L + t_{s} \cdot S + \Big( t_{Y} + t_{Y}^{'} \cdot \gamma_{peak} \Big) \cdot Y + \Big( t_{I} + t_{I}^{'} \cdot \gamma_{peak} \Big) \cdot N_{I}$
+
+```{r Modelo2, echo=FALSE}
+
+#Creating dataframe
+data.all <- data.frame(database$TEXP, database$largo_ruta, database$DET, database$Y, database$Y_peak, database$NI, database$NI_peak)
+names(data.all) <- c("texp","largo","DET","Y","Y_peak","NI","NI_peak")
+
+#Fitting the model
+modelo_02 <- lm(as.formula("texp~."), data = data.all)
+summary(modelo_02)
+
+```
+
+### Modelo 3
+
+Corresponde a una extensión del modelo anterior. En este se agrega una variable de demora extra por el trimestre de medición, rescatando la tendencia de aumento en los tiempos de viaje de los buses a lo largo del tiempo.
+
+$T = c + t_{L} \cdot L + t_{TRI} \cdot TRI + t_{s} \cdot S + \Big( t_{Y} + t_{Y}^{'} \cdot \gamma_{peak} \Big) \cdot Y + \Big( t_{I} + t_{I}^{'} \cdot \gamma_{peak} \Big) \cdot N_{I}$
+
+```{r Modelo3, echo=FALSE}
+
+#Creating dataframe
+data.all <- data.frame(database$TEXP, 
+                       database$largo_ruta, 
+                       database$U_TRI, 
+                       database$DET, 
+                       database$Y, 
+                       database$Y_peak, 
+                       database$NI, 
+                       database$NI_peak)
+
+names(data.all) <- c("texp","largo","TRI", "DET","Y","Y_peak","NI","NI_peak")
+
+#Fitting the model
+modelo_03 <- lm(as.formula("texp~."), data = data.all)
+summary(modelo_03)
+
+```
 
 
+### Modelo 4
+
+Este modelo es una extensión del modelo anterior, pero además considera una demora extra en periodos punta si es que existe la presencia de torniquete mariposa o de tres brazos.
+
+$T = c + t_{L} \cdot L + t_{TRI} \cdot TRI + t_{s} \cdot S + \Big( t_{Y} + \Big(t_{Y}^{'} + t_{Y}^{''} \cdot \gamma_{marip} + t_{Y}^{'''} \cdot \gamma_{3B} \Big) \cdot \gamma_{peak} \Big) \cdot Y + \Big( t_{I} + t_{I}^{'} \cdot \gamma_{peak} \Big) \cdot N_{I}$
+
+```{r Modelo4, echo=FALSE}
+
+#Creating dataframe
+data.all <- data.frame(database$TEXP, 
+                       database$largo_ruta, 
+                       database$U_TRI, 
+                       database$DET, 
+                       database$Y, 
+                       database$Y_peak,
+                       database$Y_peak_marip,
+                       database$Y_peak_3b,
+                       database$NI, 
+                       database$NI_peak)
+
+names(data.all) <- c("texp","largo","TRI", "DET","Y","Y_peak","Y_peak_marip","Y_peak_3b","NI","NI_peak")
+
+#Fitting the model
+modelo_04 <- lm(as.formula("texp~."), data = data.all)
+summary(modelo_04)
+
+```
+
+### Modelo 5
+Corresponde al modelo anterior, pero eliminando los tiempos extras por expediciones realizadas en periodos punta, es decir, se considera la demanda, y demoras extras si esa demanda se enfrenta a torniquete mariposa y a torniquete de tres brazos.
+
+$T = c + t_{L} \cdot L + t_{TRI} \cdot TRI + t_{s} \cdot S + \Big( t_{Y} +  t_{Y}^{'} \cdot \gamma_{marip} + t_{Y}^{''} \cdot \gamma_{3B} \Big) \cdot Y + \Big( t_{I} + t_{I}^{'} \cdot \gamma_{peak} \Big) \cdot N_{I}$
+
+```{r Modelo5, echo=FALSE}
+#Creating dataframe
+data.all <- data.frame(database$TEXP, 
+                       database$largo_ruta, 
+                       database$U_TRI, 
+                       database$DET, 
+                       database$Y, 
+                       database$Y_marip,
+                       database$Y_3b,
+                       database$NI, 
+                       database$NI_peak)
+
+names(data.all) <- c("texp","largo","TRI", "DET","Y","Y_marip","Y_3b","NI","NI_peak")
+
+#Fitting the model
+modelo_05 <- lm(as.formula("texp~."), data = data.all)
+summary(modelo_05)
+```
 
 
+### Modelo 6
+
+Corresponde a una extensión del Modelo 4, agregando además efectos de torniquete mariposa y de tres brazos en periodos fuera de punta, $i.e.$
+
+$T = c + t_{L} \cdot L + t_{TRI} \cdot TRI + t_{s} \cdot S + \Big( t_{Y} + t_{Y}^{'} \cdot \gamma_{marip} + t_{Y}^{''} \cdot \gamma_{3B} + \Big(t_{Y}^{'''} + t_{Y}^{''''} \cdot \gamma_{marip} + t_{Y}^{'''''} \cdot \gamma_{3B} \Big) \cdot \gamma_{peak} \Big) \cdot Y + \Big( t_{I} + t_{I}^{'} \cdot \gamma_{peak} \Big) \cdot N_{I}$
 
 
+```{r Modelo6, echo=FALSE}
+#Creating dataframe
+data.all <- data.frame(database$TEXP, 
+                       database$largo_ruta, 
+                       database$U_TRI, 
+                       database$DET, 
+                       database$Y,
+                       database$Y_marip,
+                       database$Y_3b,
+                       database$Y_peak,
+                       database$Y_peak_marip,
+                       database$Y_peak_3b,
+                       database$NI, 
+                       database$NI_peak)
 
+names(data.all) <- c("texp",
+                     "largo",
+                     "TRI", 
+                     "DET",
+                     "Y",
+                     "Y_marip", 
+                     "Y_3B", 
+                     "Y_peak",
+                     "Y_peak_marip",
+                     "Y_peak_3b",
+                     "NI",
+                     "NI_peak")
 
-
-
-
+#Fitting the model
+modelo_06 <- lm(as.formula("texp~."), data = data.all)
+summary(modelo_06)
+```
 
 
 
