@@ -1,0 +1,173 @@
+---
+title: "Modelling"
+output: html_notebook
+---
+
+Este script se hace con el propósito estimar modelos de tiempo de viaje a partir de los datos obtenidos de Fiscalización. Para esto se construyen modelos desde los más simple a los más complejos, utilizando diversas variables que permiten controlar su efecto en el tiempo de viaje y aislar así el impacto del uso de torniquete mariposa.
+
+```{r Functions, include=FALSE}
+
+
+##Function to load libraries and install packages, if necessary
+getLibraries <- function(libs) {
+  
+  for (lib in libs) {
+    if(!lib %in% rownames(installed.packages())){install.packages(lib, repos = "http://cran.us.r-project.org")}
+    library(as.character(lib), character.only = TRUE)
+  }
+}
+
+libs <- c("data.table",
+          "plyr",
+          "lubridate",
+          "chron",
+          "ggplot2",
+          "ggpubr",
+          "gridExtra",
+          "stringr",
+          "fuzzyjoin",
+          "sqldf",
+          "plotly",
+          "shiny")
+
+getLibraries(libs)
+```
+
+
+```{r Input, include=FALSE}
+#Setting working directory
+setwd("/Users/diego/Desktop/Evasion/01_analisis/03_datos/12_Bases_modelo/")
+
+#Reading input files
+database <- read.csv(file = "data_modelo_X5.csv", header = TRUE, sep = ";")
+```
+
+```{r Changes, include=FALSE}
+
+#Cambiando unidad de medida de largo del recorrido (Kms.)
+database$largo_ruta <- database$largo_ruta/1000
+
+
+```
+
+
+
+# Travel time models
+A continuación se crean modelos econométricos para estimar el tiempo medio de viaje controlando por el efecto de distintas variables, como el uso de torniquete mariposa. 
+
+### Modelo 1
+
+El primer modelo es un modelo simple que incluye el largo del recorrido, el número de detenciones, la demanda total y el número de intersecciones semaforizadas, $i.e.$
+
+$T = c + t_{L} \cdot L + t_{s} \cdot S + t_{Y}\cdot Y + t_{I} \cdot N_{I}$
+
+
+```{r Modelo1, echo=FALSE}
+
+data.all <- data.frame(database$TEXP, database$largo_ruta, database$DET, database$Y, database$NI)
+names(data.all) <- c("texp","largo","det","Y","NI")
+
+modelo_01 <- lm(as.formula("texp~."), data = data.all)
+summary(modelo_01)
+```
+
+
+### Modelo 2
+
+Este modelo corresponde a una extensión del modelo anterior, pero se considera un tiempo extra por demora (o ahorro) en intersecciones semaforizadas cuando el viaje se hace en periodos punta.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+### Modelo X
+
+Debido a la imposibilidad de cálculo del número de intersecciones semaforizadas de manera rigurosa (bases poco prolijas) y a probable correlación entre el número de intersecciones semaforizadas con el número de detenciones (0.62) se decide probar con dummies por cada una de las rutas (servicio-sentido). Esto tiene a su vez como argumento que el número de intersecciones y paraderos son características en generales propias del trazado del servicio-sentido. Este modelo, además considera el largo del recorrido y la demanda como variables explicativas del tiempo de viaje. Dentro del modelo finalmente reportado, solo se consideran variables de rutas estadísticamente significativas, eliminando a través de un loop todas aquellas que no lo sean en cada iteración.
+
+$T = c + t_{L} \cdot L  + t_{Y} \cdot Y +  \sum_{r}  t_{r} \cdot  \gamma_{r}$
+
+```{r ModeloX, echo=FALSE}
+
+rutas <- as.data.frame(model.matrix(~database$COD_USU_SENTIDO-1))
+names(rutas) <- substr(names(rutas),nchar(names(rutas)) - 3,nchar(names(rutas)))
+  
+#Deleting route 101I (base)
+rutas <- rutas[,-1]
+
+ind_pvalor <- length(database)
+
+while(length(ind_pvalor) != 0){
+  
+  data.all <- data.frame(database$TEXP, database$largo_ruta, database$Y)
+  names(data.all) <- c("texp","largo","Y")
+  
+  data.all <- cbind(data.all, rutas)
+  
+  modelo_0X <- lm(as.formula("texp~."), data = data.all)
+  summary(modelo_0X)
+  test_summary <- data.frame(summary(modelo_0X)[[4]])
+  test_summary <- test_summary[4:nrow(test_summary),]
+  
+  ind_pvalor <- which(test_summary$Pr...t.. > 0.05)
+  
+  #Keeping routes statistically significant
+  if(length(ind_pvalor != 0)){rutas <- rutas[,-ind_pvalor]}
+}
+
+summary(modelo_0X)
+
+```
+
+
+### Modelo X+1
+
+El tercer modelo corresponde a una extensión del segundo, pero considerando una dummy por la demanda en aquellas expediciones que utiliza torniquete.
+
+$T = c + t_{L} \cdot L  + \Big( t_{Y} + t_{Y}^{'} \cdot \gamma_{torn} \Big) \cdot Y + \sum_{r} t_{r} \gamma_{r} $
+
+```{r ModeloX+1, echo=FALSE}
+
+
+
+#Demanda en expediciones con torniquete
+Y_turnstile <- database$Y * database$turnstile
+
+
+rutas <- as.data.frame(model.matrix(~database$COD_USU_SENTIDO-1))
+names(rutas) <- substr(names(rutas),nchar(names(rutas)) - 3,nchar(names(rutas)))
+  
+#Deleting route 101I (base)
+rutas <- rutas[,-1]
+
+ind_pvalor <- length(database)
+
+while(length(ind_pvalor) != 0){
+  
+  data.all <- data.frame(database$TEXP, database$largo_ruta, database$Y, Y_turnstile)
+  names(data.all) <- c("texp","largo","Y","Y_turnstile")
+  
+  data.all <- cbind(data.all, rutas)
+  
+  modelo_02 <- lm(as.formula("texp~."), data = data.all)
+  summary(modelo_02)
+  test_summary <- data.frame(summary(modelo_02)[[4]])
+  test_summary <- test_summary[5:nrow(test_summary),]
+  
+  ind_pvalor <- which(test_summary$Pr...t.. > 0.05)
+  
+  #Keeping routes statistically significant
+  if(length(ind_pvalor != 0)){rutas <- rutas[,-ind_pvalor]}
+}
+```
+

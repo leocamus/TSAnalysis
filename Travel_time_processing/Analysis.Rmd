@@ -1,0 +1,309 @@
+---
+title: "Data Analysis"
+output: html_notebook
+---
+
+Este script se hace con el propósito de analizar la base de datos obtenidos de Fiscalización. En una primera instancia se hace un análisis descriptivo de las distintas variables generadas, desagregando aquellos buses que usan torniquete mariposa de aquellos que no tienen.
+
+
+```{r Functions, include=FALSE}
+
+##Function to load libraries and install packages, if necessary
+getLibraries <- function(libs) {
+  
+  for (lib in libs) {
+    if(!lib %in% rownames(installed.packages())){install.packages(lib, repos = "http://cran.us.r-project.org")}
+    library(as.character(lib), character.only = TRUE)
+  }
+}
+
+boxplot_total <- function(dataframe){
+  #Función que calcula boxplot para el total de datos seperando expediciones con y sin torniquete.
+    #Dataframe corresponde a las expediciones por servicio-periodo
+  
+  #Subsetting dataframe by turnstile usage
+  dataframe_st <- subset(dataframe, dataframe$turnstile == 0)
+  dataframe_ct <- subset(dataframe, dataframe$turnstile_marip == 1)
+  
+  if(nrow(dataframe_st) > 0 & nrow(dataframe_ct) > 0){
+    
+    #Combining two datasets
+    dataset <- rbind(dataframe_ct,dataframe_st)
+    dataset$categoria <- c(rep("C/T", nrow(dataframe_ct)),rep("S/T",nrow(dataframe_st)))
+    
+    pdf(file = paste(unique(dataframe$ServicioSentido),"-",unique(dataframe$PeriodoTSExpedicion), ".pdf", sep = ""), 10,5)
+    
+    #Boxplots
+    b1 <- ggplot(data = dataframe_ct, aes(x= "", y= texpedicion)) + 
+      geom_boxplot() +
+      xlab("") +
+      stat_summary(fun.y = mean, colour= "green", geom="point", 
+                   shape=18, size=3) +
+      ylab("TExpedicion (min)") +
+      coord_cartesian(ylim = c(min(dataframe_ct$texpedicion,dataframe_st$texpedicion), max(dataframe_ct$texpedicion,dataframe_st$texpedicion))) +
+      ggtitle("With turnstile")
+    
+    b2 <- ggplot(data = dataframe_st, aes(x= "", y= texpedicion)) + 
+      geom_boxplot() +
+      xlab("") +
+      ylab("TExpedicion (min)") +
+      stat_summary(fun.y = mean, colour= "green", geom="point", 
+                   shape=18, size=3) +
+      coord_cartesian(ylim = c(min(dataframe_ct$texpedicion,dataframe_st$texpedicion), max(dataframe_ct$texpedicion,dataframe_st$texpedicion))) +
+      ggtitle("Without turnstile")
+    
+    p1 <- ggplot(data=dataset, aes(x=1:nrow(dataset), y=dataset$texpedicion, col=categoria)) + 
+      geom_point() +
+      xlab("Obs.") +
+      ylab("TExpedicion (min)") +
+      theme(legend.title = element_blank(),
+            axis.text.x = element_blank(),
+            legend.position="top",
+            legend.margin=margin(0,0,0,0),
+            legend.box.margin=margin(-10,-10,-10,-10)) +
+      coord_cartesian(ylim = c(min(dataframe_ct$texpedicion,dataframe_st$texpedicion), max(dataframe_ct$texpedicion,dataframe_st$texpedicion))) +
+      ggtitle("Dataset")
+    
+    
+    #Plotting
+    grid.arrange(b1, b2, p1, ncol = 3, nrow = 1, widths=c(1,1,2.5), top= paste(unique(dataframe$ServicioSentido),"-",unique(dataframe$PeriodoTSExpedicion), sep = ""))
+    
+    dev.off()
+    
+  }
+}
+
+boxplot_dia <- function(dataframe){
+  #Función que calcula boxplot por cada día de una semana.
+    #Input corresponde a un dataframe con expediciones con y sin torniquete de toda la semana.
+  
+  #Subsetting dataframe by turnstile usage
+  dataframe_st <- subset(dataframe, dataframe$turnstile == 0)
+  dataframe_ct <- subset(dataframe, dataframe$turnstile_marip == 1)
+  
+  
+  #Creating boxplot per day
+  if(length(unique(dataframe_ct$wday)) == 5 & length(unique(dataframe_st$wday)) == 5){
+    
+    pdf(file = paste("BOX_SEMANA - ",unique(dataframe$ServicioSentido),"-",unique(dataframe$PeriodoTSExpedicion), ".pdf", sep = ""), 10,5)
+    
+    #Boxplots
+    b1 <- ggplot(data = dataframe_ct, aes(x= weekday, y= texpedicion)) + 
+      geom_boxplot(aes(fill=weekday)) +
+      xlab("") +
+      ylab("TExpedicion (min)") +
+      theme(legend.position="none") +
+      coord_cartesian(ylim = c(min(dataframe_ct$texpedicion,dataframe_st$texpedicion), max(dataframe_ct$texpedicion,dataframe_st$texpedicion))) +
+      ggtitle("With turnstile")
+    
+    b2 <- ggplot(data = dataframe_st, aes(x= weekday, y= texpedicion)) + 
+      geom_boxplot(aes(fill=weekday)) +
+      xlab("") +
+      ylab("TExpedicion (min)") +
+      coord_cartesian(ylim = c(min(dataframe_ct$texpedicion,dataframe_st$texpedicion), max(dataframe_ct$texpedicion,dataframe_st$texpedicion))) +
+      ggtitle("Without turnstile")
+    
+    
+    #Plotting
+    grid.arrange(b1, b2, ncol = 2, nrow = 1, widths=c(1,1.3), top= paste(unique(dataframe$ServicioSentido),"-",unique(dataframe$PeriodoTSExpedicion), sep = ""))
+    
+    
+    dev.off()
+    
+  }
+}
+
+fill_patente <- function(placa){
+  return(paste(unlist(strsplit(as.character(placa), "(?=[A-Za-z])(?<=[0-9])|(?=[0-9])(?<=[A-Za-z])", perl=TRUE)), collapse = "-"))
+  }
+
+cbind.all <- function (...){
+  nm <- list(...)
+  nm <- lapply(nm, as.matrix)
+  n <- max(sapply(nm, nrow))
+  do.call(cbind, lapply(nm, function(x) rbind(x, matrix(, n - 
+                                                          nrow(x), ncol(x)))))
+}
+
+
+libs <- c("data.table",
+          "plyr",
+          "lubridate",
+          "chron",
+          "ggplot2",
+          "ggpubr",
+          "gridExtra",
+          "stringr",
+          "fuzzyjoin",
+          "sqldf",
+          "plotly",
+          "shiny")
+
+getLibraries(libs)
+```
+
+# Data Analysis
+### Análisis de variables
+```{r Input, include=FALSE}
+#Setting working directory
+setwd("/Users/diego/Desktop/Evasion/01_analisis/03_datos/12_Bases_modelo/")
+
+#Reading input files
+database <- read.csv(file = "data_modelo_X5.csv", header = TRUE, sep = ";")
+
+```
+
+
+Número de expediciones sin torniquete:
+```{r echo=FALSE}
+sum(database$n_turnstile)
+```
+
+Número de expediciones con torniquete mariposa:
+```{r echo=FALSE}
+sum(database$turnstile_marip)
+```
+
+Recorridos que tienen expediciones con torniquete mariposa:
+```{r echo=FALSE}
+unique(database$ROUTE_NAME[which(database$turnstile_marip==1)])
+```
+
+
+Número de expediciones con torniquete mariposa en periodo punta:
+
+```{r echo=FALSE}
+
+ind_peak <- which(database$Periodo == "04 - Punta Manana" | database$Periodo == "09 - Punta Tarde")
+sum(database$turnstile_marip[ind_peak])
+```
+
+
+Número de expediciones con torniquete de tres brazos:
+```{r echo=FALSE}
+length(which(database$n_turnstile==0 & database$turnstile_marip==0))
+```
+
+
+Número de expediciones con torniquete mariposa en periodo punta (mañana o tarde) por recorrido-sentido:
+
+```{r echo=FALSE}
+
+ind_tmarip_peak <- which((database$Periodo == "04 - Punta Manana" | database$Periodo == "09 - Punta Tarde") & database$turnstile_marip == 1)
+data_marip_peak <- database[ind_tmarip_peak,]
+tmp <- data.frame(table(data_marip_peak$COD_USU))
+head(tmp[order(tmp$Freq, decreasing = TRUE),], 10)
+rm(tmp)
+```
+
+
+Número de observaciones por periodo y si tiene o no torniquete:
+
+```{r echo=FALSE}
+#Agregando variable por uso de torniquete de tres brazos
+database$turnstile_3b <- 0
+ind_3b <- which(database$n_turnstile==0 & database$turnstile_marip == 0)
+database$turnstile_3b[ind_3b] <- 1
+
+#Dataframe que contiene Periodos y si tiene o no torniquete más si tiene o no mariposa.
+tmp_no <- as.data.frame.matrix(table(database$Periodo, database$n_turnstile))[,-1]
+tmp_si <- as.data.frame.matrix(table(database$Periodo, database$turnstile_marip))[,-1]
+tmp_3b <- as.data.frame.matrix(table(database$Periodo, database$turnstile_3b))[,-1]
+
+dt <- data.frame(table(database$Periodo),tmp_no, tmp_si,tmp_3b)
+names(dt) <- c("Periodo","Total","Sin","Mariposa","3B")
+dt
+
+```
+
+
+
+### Histograma tiempos de expedicion:
+
+En esta sección se grafican distintos histogramas y relaciones entre variables explicativas y el tiempo de expedición desagregando aquellas observaciones que se hacen en buses sin torniquete y aquellas en donde se utiliza torniquete mariposa.
+
+```{r Histograms, echo=FALSE, plotly=TRUE}
+
+#Cambiando unidad de medida de largo del recorrido
+database$largo_ruta <- database$largo_ruta/1000
+
+#Agregando variables para uso y no, de torniquete mariposa en un dataframe
+database_marip <- database[which(database$turnstile_marip==1),]
+database_noturn <- database[which(database$n_turnstile==1),]
+database_marip$TORNIQUETE <- "SI"
+database_noturn$TORNIQUETE <- "NO"
+
+database_turnstile <- rbind(database_marip[,c("TORNIQUETE","Y","largo_ruta","TEXP")],database_noturn[,c("TORNIQUETE","Y","largo_ruta","TEXP")])
+
+
+#Histograma de los tiempos de expedición por uso de torniquete
+#Histograma simple
+#pdf(file = "histograma_texp.pdf",7,5)
+ggplot(database_turnstile, aes(database_turnstile$TEXP, fill = factor(database_turnstile$TORNIQUETE))) +
+  geom_histogram(bins = 40) + 
+  theme_bw() +
+  theme(panel.border = element_blank()) +
+  labs(x= "Tiempo de expedición (s)", y= "Frecuencia", fill= "Uso Torniquete")
+#dev.off()
+
+#Histograma de densidad
+#pdf(file = "densidad_texp.pdf",7,5)
+ggplot(database_turnstile, aes(database_turnstile$TEXP, fill = factor(database_turnstile$TORNIQUETE))) +
+  geom_density(alpha= 0.3) + 
+  theme_bw() +
+  theme(panel.border = element_blank()) +
+  labs(x= "Tiempo de expedición (s)", y= "Densidad", fill= "Uso Torniquete")
+#dev.off()
+
+
+
+#Gráficos de los tiempos de expedición con demanda y largo como variable explicativa
+#pdf(file = "demanda_texp_turnstile.pdf",7,5)
+ggplot(database_turnstile, aes(x=database_turnstile$Y, y=database_turnstile$TEXP, colour=factor(database_turnstile$TORNIQUETE), shape=factor(database_turnstile$TORNIQUETE))) + 
+  geom_point() +
+  labs(x= "Demanda Total (pax)", y= "Tiempo de expedición (s)") +
+  theme_bw() +
+  theme(panel.border = element_blank(),
+        legend.title = element_blank())
+
+#dev.off()
+
+
+#pdf(file = "largo_texp_turnstile.pdf",7,5)
+ggplot(database_turnstile, aes(x=database_turnstile$largo_ruta, y=database_turnstile$TEXP, colour=factor(database_turnstile$TORNIQUETE), shape=factor(database_turnstile$TORNIQUETE))) + 
+  geom_point() +
+  labs(x= "Largo recorrido (Km)", y= "Tiempo de expedición (s)") +
+  theme_bw() +
+  theme(panel.border = element_blank(),
+        legend.title = element_blank())
+
+#dev.off()
+
+# #Making interactive plot
+# inputPanel(
+#   selectInput("n_breaks", label = "Number of bins:", choices = seq(10,100,10), selected = 30)
+# 
+#   #sliderInput("bw_adjust", label = "Bandwidth adjustment:", min = 0.2, max = 2, value = 1, step = 0.2)
+# )
+# 
+# renderPlot({
+#   ggplot(texpedicion, aes(texpedicion$texp)) +
+#   geom_histogram(bins= as.numeric(input$n_breaks)) +
+#   theme_bw() +
+#   theme(panel.border = element_blank())
+# })
+
+
+#Interactive plot
+# p <- ggplot(texpedicion, aes(texpedicion$texp)) +
+#   geom_histogram(bins=40) +
+#   theme_bw() +
+#   theme(panel.border = element_blank())
+# 
+# ggplotly(p)
+# p <- ggplotly(p)
+# 
+# # Create a shareable link to your chart
+# # Set up API credentials: https://plot.ly/r/getting-started
+# htmlwidgets::saveWidget(as_widget(p), "histograma_texp.html")
+```
