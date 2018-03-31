@@ -198,7 +198,9 @@ summary(modelo_04)
 
 ### Modelo 5
 
-Dado que solo buses de la Unidad 2 tienen torniquete de tres brazos, no parece correcto controlar por el uso de dicho torniquete, pues implícitamente está el control por la unidad de negocio señalada. Por esta razón se controla solo por uso de torniquete mariposa y se agrega torniquete de tres brazos en no torniquete.
+Dado que solo buses de la Unidad 2 tienen torniquete de tres brazos, no parece correcto controlar por el uso de dicho torniquete, pues implícitamente está el control por la unidad de negocio señalada (lo que tiene otro tipo de consideraciones). Por esta razón se controla solo por uso de torniquete mariposa y se agrega torniquete de tres brazos en no torniquete $i.e.$
+
+$T = c + t_{L} \cdot L + t_{TRI} \cdot TRI + t_{s} \cdot S + \Big( t_{Y} + \Big(t_{Y}^{'} + t_{Y}^{''} \cdot \gamma_{marip} \Big) \cdot \gamma_{peak} \Big) \cdot Y + \Big( t_{I} + t_{I}^{'} \cdot \gamma_{peak} \Big) \cdot N_{I}$
 
 ```{r Modelo5, echo=FALSE}
 
@@ -308,7 +310,7 @@ summary(modelo_07)
 
 ### Modelo 8
 
-En lo sucesivo se estiman modelos sobre la base registros realizados por buses que no cuentan con torniquete y buses que utilizan torniquete mariposa, es decir, se eliminan registros de buses con torniquete de tres brazos. El siguiente modelo es una extensión del anterior, pero considerando que el efecto del torniquete es apreciado solo en la puerta 1, y no en el resto, $i.e.$
+En lo sucesivo se estiman modelos sobre la base de registros realizados por buses que no cuentan con torniquete y buses que utilizan torniquete mariposa, es decir, se eliminan registros de buses con torniquete de tres brazos. El siguiente modelo es una extensión del anterior, pero considerando que el efecto del torniquete es apreciado solo en la puerta 1, y no en el resto, $i.e.$
 
 $T = c + t_{L} \cdot L + t_{TRI} \cdot TRI + t_{s} \cdot S + \Big( t_{Y} + t_{Y}^{'} \cdot \gamma_{marip} + \Big(t_{Y}^{''} + t_{Y}^{'''} \cdot \gamma_{marip}  \Big) \cdot \gamma_{peak} \Big) \cdot Y_{P_{1}} + t_{Y}^{''''} \cdot Y_{resto} + \Big( t_{I} + t_{I}^{'} \cdot \gamma_{peak} \Big) \cdot N_{I}$
 
@@ -414,6 +416,7 @@ Y1 <- dataset$I.P1
 Y1_marip <- dataset$I.P1 * dataset$turnstile_marip
 Y1_peak <- dataset$I.P1 * dataset$Punta
 Y1_peak_marip <- dataset$I.P1 * dataset$Punta * dataset$turnstile_marip
+
 Y_resto <- dataset$I.P2 + dataset$I.P3 + dataset$I.P4
 Y_resto_peak <- Y_resto * dataset$Punta
 Y_resto_marip <- Y_resto * dataset$turnstile_marip
@@ -484,17 +487,14 @@ data.all <- data.frame(dataset$TEXP,
                        dataset$largo_ruta, 
                        dataset$U_TRI, 
                        dataset$DET,
-                       
                        Y_PN1,
                        Y_PN1_marip,
                        Y_PN1_peak,
                        Y_PN1_peak_marip,
-                       
                        Y_ZP1,
                        Y_ZP1_marip,
                        Y_ZP1_peak,
                        Y_ZP1_peak_marip,
-                       
                        Y_resto,
                        dataset$NI, 
                        dataset$NI_peak)
@@ -503,17 +503,14 @@ names(data.all) <- c("texp",
                      "largo",
                      "TRI", 
                      "DET",
-                     
                      "Y_PN1",
                      "Y_PN1_marip", 
                      "Y_PN1_peak",
                      "Y_PN1_peak_marip",
-                     
                      "Y_ZP1",
                      "Y_ZP1_marip",
                      "Y_ZP1_peak",
                      "Y_ZP1_peak_marip",
-                     
                      "Y_resto",
                      "NI",
                      "NI_peak")
@@ -525,6 +522,7 @@ summary(modelo_11)
 
 ```
 
+Los resultados anteriores dan cuenta del no uso de la puerta uno durante las subidas y bajadas cuando el bus cuanta con torniquete mariposa en zona paga, razón por la cual dicha variable es considerada estadísticamente no significativa. Además se observa el hecho de que existen personas que ingresan al bus a través de Zonas Pagas por las puertas 2, 3 y 4 (la mayoría), por lo que la modelación anterior no es necesariamente correcta.
 
 ### Modelo 12
 
@@ -587,7 +585,7 @@ summary(modelo_12)
 
 ### Modelo 13
 
-Modelo anterior pero considerando demoras extras por uso de torniquete en personas que ingresan en ZP por puerta 1.
+Este modelo es una extensión del modelo anterior. En particular se prueba la significancia del uso de torniquete mariposa cuando se ingresa al bus a través de una ZP.
 
 $T = c + t_{L} \cdot L + t_{TRI} \cdot TRI + t_{s} \cdot S + \Big( t_{Y} + t_{Y}^{'} \cdot \gamma_{marip} + \Big(t_{Y}^{''} + t_{Y}^{'''} \cdot \gamma_{marip}  \Big) \cdot \gamma_{peak} \Big) \cdot Y_{PN_{1}} + \Big( t_{Y}^{''''} + t_{Y}^{'''''} \cdot \gamma_{marip} \Big) \cdot Y_{ZP_{1}} + t_{Y}^{''''} \cdot Y_{resto} + \Big( t_{I} + t_{I}^{'} \cdot \gamma_{peak} \Big) \cdot N_{I}$
 
@@ -647,10 +645,13 @@ summary(modelo_13)
 
 ```
 
+Variable del uso de torniquete mariposa por la puerta 1 cuando se ingresa al bus a través de ZP, es estadísticamente no significativa, dando cuenta del no uso de esta puerta en dichas condiciones. El modelo anterior sigue teniendo un problema de modelación. En $Y_{resto}$ se tiene la demanda que ingresa por las puertas 2 a 4, la que es esencialmente ZP y que no está siendo considerada en la variable asociada a este fenómeno, razón por la que se modela la demanda restante entre aquella que lo hace por paradero normal y aquellos que ingresan al bus a través de ZP.
 
 #### Modelo 14
 
 Modelo anterior, pero desagregando la demanda restante en aquella que ingresa por paradero normal y zona paga.
+
+$T = c + t_{L} \cdot L + t_{TRI} \cdot TRI + t_{s} \cdot S + \Big( t_{Y} + t_{Y}^{'} \cdot \gamma_{marip} + \Big(t_{Y}^{''} + t_{Y}^{'''} \cdot \gamma_{marip}  \Big) \cdot \gamma_{peak} \Big) \cdot Y_{PN_{1}} + \Big( t_{Y}^{''''} + t_{Y}^{'''''} \cdot \gamma_{marip} \Big) \cdot Y_{ZP_{1}} + t_{Y}^{''''} \cdot Y_{resto} + \Big( t_{I} + t_{I}^{'} \cdot \gamma_{peak} \Big) \cdot N_{I}$
 
 ```{r Modelo14, echo=FALSE}
 
@@ -659,31 +660,20 @@ Y_PN1_marip <- dataset$I.PN.P1 * dataset$turnstile_marip
 Y_PN1_peak <- dataset$I.PN.P1 * dataset$Punta
 Y_PN1_peak_marip <- dataset$I.PN.P1 * dataset$Punta * dataset$turnstile_marip
 
-Y_ZP1 <- dataset$I.ZP.P1
-Y_ZP1_marip <- dataset$I.ZP.P1 * dataset$turnstile_marip
-Y_ZP1_peak <- dataset$I.ZP.P1 * dataset$Punta
-Y_ZP1_peak_marip <- dataset$I.ZP.P1 * dataset$Punta * dataset$turnstile_marip
-
-Y_resto_PN <- dataset$I.PN.P2 + dataset$I.PN.P3 + dataset$I.PN.P4
+Y_PN_resto <- dataset$I.PN.P2 + dataset$I.PN.P3 + dataset$I.PN.P4
 Y_ZP <- dataset$I.ZP.P1 + dataset$I.ZP.P2 + dataset$I.ZP.P3 + dataset$I.ZP.P4
-
-Y_ZP_torniquete <- Y_ZP * dataset$turnstile_marip
-Y_ZP_peak <- Y_ZP * dataset$Punta
 
 #Creating dataframe
 data.all <- data.frame(dataset$TEXP, 
                        dataset$largo_ruta, 
                        dataset$U_TRI, 
                        dataset$DET,
-                       
                        Y_PN1,
                        Y_PN1_marip,
                        Y_PN1_peak,
                        Y_PN1_peak_marip,
-                       
-                       Y_resto_PN,
+                       Y_PN_resto,
                        Y_ZP,
-                       
                        dataset$NI, 
                        dataset$NI_peak)
 
@@ -692,12 +682,12 @@ names(data.all) <- c("texp",
                      "TRI", 
                      "DET",
                      
-                     "Y_PN1",
-                     "Y_PN1_marip", 
-                     "Y_PN1_peak",
-                     "Y_PN1_peak_marip",
+                     "Y_PN_P1",
+                     "Y_PN_P1_marip", 
+                     "Y_PN_P1_peak",
+                     "Y_PN_P1_peak_marip",
                      
-                     "Y_resto_PN",
+                     "Y_PN",
                      "Y_ZP",
                      
                      "NI",
@@ -710,7 +700,32 @@ summary(modelo_14)
 
 ```
 
+El modelo a continuación es simple y solo desagrega la demanda en aquella que ingresa por paradero normal y aquella que lo hace por zona paga, con el fin de conocer los tiempos promedios de subida y bajada en cada caso, $i.e.$
 
+$T = c + t_{L} \cdot L + t_{s} \cdot S +  t_{Y} \cdot Y_{PN}  + t_{Y}^{'} \cdot Y_{ZP} + \Big( t_{I} + t_{I}^{'} \cdot \gamma_{peak} \Big) \cdot N_{I}$
+
+
+```{r Modelo15, echo=FALSE}
+data.all <- data.frame(dataset$TEXP, 
+                       dataset$largo_ruta, 
+                       dataset$DET, 
+                       dataset$I.PN,
+                       dataset$I.ZP,
+                       dataset$NI,
+                       dataset$NI_peak)
+
+
+names(data.all) <- c("texp",
+                     "largo",
+                     "det",
+                     "Y_PN",
+                     "Y_ZP",
+                     "NI",
+                     "NI_peak")
+
+modelo_15 <- lm(as.formula("texp~."), data = data.all)
+summary(modelo_15)
+```
 
 
 
