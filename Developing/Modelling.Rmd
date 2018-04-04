@@ -50,6 +50,8 @@ database <- read.csv(file = "data_modelo_X5.csv", header = TRUE, sep = ";")
 #Cambiando unidad de medida de largo del recorrido (Kms.)
 database$largo_ruta <- database$largo_ruta/1000
 
+database$COD_USU_SENTIDO <- as.character(database$COD_USU_SENTIDO)
+
 #One hot encoding for periods of time
 periodos <- as.data.frame(model.matrix(~database$Periodo-1))
 names(periodos) <- sprintf("P%s",3:10)
@@ -57,6 +59,12 @@ periodo_punta <- periodos$P4 + periodos$P9
 
 database <- cbind(database, periodos)
 database$Punta <- periodo_punta
+
+#One hot encoding for Unidad de Negocio
+UN <- as.data.frame(model.matrix(~database$UN-1))
+names(UN) <- sprintf("U%s",1:7)
+
+database <- cbind(database, UN)
 
 #NI peak
 database$NI_peak <- database$NI * periodo_punta
@@ -89,6 +97,8 @@ dataset <- database[-which(database$turnstile_3b==1),]
 dataset$turnstile_3b <- NULL
 dataset$Y_peak_3b <- NULL
 dataset$Y_3b <- NULL
+
+dataset_original <- dataset
 ```
 
 
@@ -651,7 +661,7 @@ Variable del uso de torniquete mariposa por la puerta 1 cuando se ingresa al bus
 
 Modelo anterior, pero desagregando la demanda restante en aquella que ingresa por paradero normal y zona paga.
 
-$T = c + t_{L} \cdot L + t_{TRI} \cdot TRI + t_{s} \cdot S + \Big( t_{Y} + t_{Y}^{'} \cdot \gamma_{marip} + \Big(t_{Y}^{''} + t_{Y}^{'''} \cdot \gamma_{marip}  \Big) \cdot \gamma_{peak} \Big) \cdot Y_{PN_{1}} + \Big( t_{Y}^{''''} + t_{Y}^{'''''} \cdot \gamma_{marip} \Big) \cdot Y_{ZP_{1}} + t_{Y}^{''''} \cdot Y_{resto} + \Big( t_{I} + t_{I}^{'} \cdot \gamma_{peak} \Big) \cdot N_{I}$
+$T = c + t_{L} \cdot L + t_{TRI} \cdot TRI + t_{s} \cdot S + \Big( t_{Y} + t_{Y}^{'} \cdot \gamma_{marip} + \Big(t_{Y}^{''} + t_{Y}^{'''} \cdot \gamma_{marip}  \Big) \cdot \gamma_{peak} \Big) \cdot Y_{PN_{1}} + t_{Y}^{''''} \cdot Y_{PN} + t_{Y}^{'''''} \cdot Y_{ZP} + \Big( t_{I} + t_{I}^{'} \cdot \gamma_{peak} \Big) \cdot N_{I}$
 
 ```{r Modelo14, echo=FALSE}
 
@@ -700,6 +710,8 @@ summary(modelo_14)
 
 ```
 
+#### Modelo 15
+
 El modelo a continuación es simple y solo desagrega la demanda en aquella que ingresa por paradero normal y aquella que lo hace por zona paga, con el fin de conocer los tiempos promedios de subida y bajada en cada caso, $i.e.$
 
 $T = c + t_{L} \cdot L + t_{s} \cdot S +  t_{Y} \cdot Y_{PN}  + t_{Y}^{'} \cdot Y_{ZP} + \Big( t_{I} + t_{I}^{'} \cdot \gamma_{peak} \Big) \cdot N_{I}$
@@ -728,146 +740,1562 @@ summary(modelo_15)
 ```
 
 
+### Modelo 16
+
+En el modelo siguiente se ajusta un Modelo 14 pero solo en aquellos recorridos que fueron editados en su número de intersecciones semaforizadas, y por tanto existe una mayor seguridad de su valor.
+
+$T = c + t_{L} \cdot L + t_{TRI} \cdot TRI + t_{s} \cdot S + \Big( t_{Y} + t_{Y}^{'} \cdot \gamma_{marip} + \Big(t_{Y}^{''} + t_{Y}^{'''} \cdot \gamma_{marip}  \Big) \cdot \gamma_{peak} \Big) \cdot Y_{PN_{1}} + \Big( t_{Y}^{''''} + t_{Y}^{'''''} \cdot \gamma_{marip} \Big) \cdot Y_{ZP_{1}} + t_{Y}^{''''} \cdot Y_{resto} + \Big( t_{I} + t_{I}^{'} \cdot \gamma_{peak} \Big) \cdot N_{I}$
+
+```{r Modelo16, echo=FALSE}
+
+#Setting working space
+setwd("/Users/diego/Desktop/Evasion/01_analisis/03_datos/04_NI/")
+servicios_subset <- read.csv(file = "recorridos_editado.csv", header = TRUE, sep = ";")
+
+servicios_subset$Editados <- gsub(" ","",servicios_subset$Editados)
+servicios_subset$Editados <- toupper(servicios_subset$Editados)
+
+#Getting routes subset
+dataset <- dataset[which(dataset$ROUTE_NAME %in% servicios_subset$Editados),]
 
 
+Y_PN1 <- dataset$I.PN.P1
+Y_PN1_marip <- dataset$I.PN.P1 * dataset$turnstile_marip
+Y_PN1_peak <- dataset$I.PN.P1 * dataset$Punta
+Y_PN1_peak_marip <- dataset$I.PN.P1 * dataset$Punta * dataset$turnstile_marip
+
+Y_PN_resto <- dataset$I.PN.P2 + dataset$I.PN.P3 + dataset$I.PN.P4
+Y_ZP <- dataset$I.ZP.P1 + dataset$I.ZP.P2 + dataset$I.ZP.P3 + dataset$I.ZP.P4
+
+#Creating dataframe
+data.all <- data.frame(dataset$TEXP, 
+                       dataset$largo_ruta, 
+                       dataset$U_TRI, 
+                       dataset$DET,
+                       Y_PN1,
+                       Y_PN1_marip,
+                       Y_PN1_peak,
+                       Y_PN1_peak_marip,
+                       Y_PN_resto,
+                       Y_ZP,
+                       dataset$NI, 
+                       dataset$NI_peak)
+
+names(data.all) <- c("texp",
+                     "largo",
+                     "TRI", 
+                     "DET",
+                     
+                     "Y_PN_P1",
+                     "Y_PN_P1_marip", 
+                     "Y_PN_P1_peak",
+                     "Y_PN_P1_peak_marip",
+                     
+                     "Y_PN",
+                     "Y_ZP",
+                     
+                     "NI",
+                     "NI_peak")
+
+#Original database
+dataset <- dataset_original
 
 
+#Fitting the model
+modelo_16 <- lm(as.formula("texp~."), data = data.all)
+summary(modelo_16)
 
-
-
-
-
-### Modelo X
-
-Debido a la imposibilidad de cálculo del número de intersecciones semaforizadas de manera rigurosa (bases poco prolijas) y a probable correlación entre el número de intersecciones semaforizadas con el número de detenciones (0.62) se decide probar con dummies por cada una de las rutas (servicio-sentido). Esto tiene a su vez como argumento que el número de intersecciones y paraderos son características en generales propias del trazado del servicio-sentido. Este modelo, además considera el largo del recorrido y la demanda como variables explicativas del tiempo de viaje. Dentro del modelo finalmente reportado, solo se consideran variables de rutas estadísticamente significativas, eliminando a través de un loop todas aquellas que no lo sean en cada iteración.
-
-$T = c + t_{L} \cdot L  + t_{Y} \cdot Y +  \sum_{r}  t_{r} \cdot  \gamma_{r}$
-
-```{r ModeloX, echo=FALSE}
-
-rutas <- as.data.frame(model.matrix(~database$COD_USU_SENTIDO-1))
-names(rutas) <- substr(names(rutas),nchar(names(rutas)) - 3,nchar(names(rutas)))
-  
-#Deleting route 101I (base)
-rutas <- rutas[,-1]
-
-ind_pvalor <- length(database)
-
-while(length(ind_pvalor) != 0){
-  
-  data.all <- data.frame(database$TEXP, database$largo_ruta, database$Y)
-  names(data.all) <- c("texp","largo","Y")
-  
-  data.all <- cbind(data.all, rutas)
-  
-  modelo_0X <- lm(as.formula("texp~."), data = data.all)
-  summary(modelo_0X)
-  test_summary <- data.frame(summary(modelo_0X)[[4]])
-  test_summary <- test_summary[4:nrow(test_summary),]
-  
-  ind_pvalor <- which(test_summary$Pr...t.. > 0.05)
-  
-  #Keeping routes statistically significant
-  if(length(ind_pvalor != 0)){rutas <- rutas[,-ind_pvalor]}
-}
-
-summary(modelo_0X)
 
 ```
 
+### Modelo 17
 
-### Modelo X+1
+El siguiente modelo es un intento por determinar el impacto que tienen relaciones cuadráticas de la demanda (si las hubiere) en los tiempos de viaje y el uso de torniquete mariposa.
 
-El tercer modelo corresponde a una extensión del segundo, pero considerando una dummy por la demanda en aquellas expediciones que utiliza torniquete.
+```{r Modelo17, echo=FALSE}
 
-$T = c + t_{L} \cdot L  + \Big( t_{Y} + t_{Y}^{'} \cdot \gamma_{torn} \Big) \cdot Y + \sum_{r} t_{r} \gamma_{r}$
-
-```{r ModeloX+1, echo=FALSE}
-
-
-
-#Demanda en expediciones con torniquete
-Y_turnstile <- database$Y * database$turnstile
+Y_PN1 <- dataset$I.PN.P1
+Y_PN1_2 <- dataset$I.PN.P1 * dataset$I.PN.P1
+Y_PN1_2_marip <- dataset$I.PN.P1 * dataset$I.PN.P1 * dataset$turnstile_marip
 
 
-rutas <- as.data.frame(model.matrix(~database$COD_USU_SENTIDO-1))
-names(rutas) <- substr(names(rutas),nchar(names(rutas)) - 3,nchar(names(rutas)))
-  
-#Deleting route 101I (base)
-rutas <- rutas[,-1]
+Y_PN_resto <- dataset$I.PN.P2 + dataset$I.PN.P3 + dataset$I.PN.P4
+Y_ZP <- dataset$I.ZP.P1 + dataset$I.ZP.P2 + dataset$I.ZP.P3 + dataset$I.ZP.P4
 
-ind_pvalor <- length(database)
+#Creating dataframe
+data.all <- data.frame(dataset$TEXP, 
+                       dataset$largo_ruta, 
+                       dataset$U_TRI, 
+                       dataset$DET,
+                       
+                       Y_PN1,
+                       Y_PN1_2,
+                       Y_PN1_2_marip,
+                       
+                       Y_PN_resto,
+                       Y_ZP,
+                       dataset$NI, 
+                       dataset$NI_peak)
 
-while(length(ind_pvalor) != 0){
-  
-  data.all <- data.frame(database$TEXP, database$largo_ruta, database$Y, Y_turnstile)
-  names(data.all) <- c("texp","largo","Y","Y_turnstile")
-  
-  data.all <- cbind(data.all, rutas)
-  
-  modelo_0X1 <- lm(as.formula("texp~."), data = data.all)
-  summary(modelo_0X1)
-  test_summary <- data.frame(summary(modelo_0X1)[[4]])
-  test_summary <- test_summary[5:nrow(test_summary),]
-  
-  ind_pvalor <- which(test_summary$Pr...t.. > 0.05)
-  
-  #Keeping routes statistically significant
-  if(length(ind_pvalor != 0)){rutas <- rutas[,-ind_pvalor]}
-}
-
-summary(modelo_0X1)
-```
+names(data.all) <- c("texp",
+                     "largo",
+                     "TRI", 
+                     "DET",
+                     
+                     "Y_PN_P1",
+                     "Y_PN_P1^2", 
+                     "Y_PN_P1^2_marip",
+                     
+                     "Y_PN",
+                     "Y_ZP",
+                     
+                     "NI",
+                     "NI_peak")
 
 
-### Modelo X+2
-
-Corresponde al modelo más complejo en la demanda estimado hasta ahora, pero considerando como variable extra solo el largo del recorrido y dummies por servicio-sentido.
-
-```{r ModeloX+2, echo=FALSE}
-
-rutas <- as.data.frame(model.matrix(~database$COD_USU_SENTIDO-1))
-names(rutas) <- as.character(substr(names(rutas),nchar(names(rutas)) - 3,nchar(names(rutas))))
-  
-#Deleting route 101I (base)
-rutas <- rutas[,-1]
-
-ind_pvalor <- length(database)
-
-while(length(ind_pvalor) != 0){
-  
-  data.all <- data.frame(database$TEXP, 
-                         database$largo_ruta, 
-                         Y1,
-                         Y1_marip,
-                         Y1_peak,
-                         Y1_peak_marip,
-                         Y_resto)
-  
-  names(data.all) <- c("texp",
-                       "largo",
-                       "Y1",
-                       "Y1_marip",
-                       "Y1_peak",
-                       "Y1_peak_marip",
-                       "Y_resto")
-  
-  data.all <- cbind(data.all, rutas)
-  
-  modelo_0X2 <- lm(as.formula("texp~."), data = data.all)
-  summary(modelo_0X2)
-  test_summary <- data.frame(summary(modelo_0X2)[[4]])
-  test_summary <- test_summary[8:nrow(test_summary),]
-  
-  ind_pvalor <- which(test_summary$Pr...t.. > 0.05)
-  
-  #Keeping routes statistically significant
-  if(length(ind_pvalor != 0)){rutas <- rutas[,-ind_pvalor]}
-}
-
-summary(modelo_0X2)
+#Fitting the model
+modelo_17 <- lm(as.formula("texp~."), data = data.all)
+summary(modelo_17)
 
 ```
+
+### Modelo 18
+
+En este modelo se prueba el Modelo 14, pero en toda la base de datos, es decir, incorporando y controlando por el efecto de expediciones realizadas en buses con torniquete de tres brazos, tanto en periodos fuera de punta como periodos punta, $i.e.$
+
+$T = c + t_{L} \cdot L + t_{TRI} \cdot TRI + t_{s} \cdot S + \Big( t_{Y} + t_{Y}^{'} \cdot \gamma_{marip} + t_{Y}^{''} \cdot \gamma_{3B} + \Big(t_{Y}^{'''} + t_{Y}^{''''} \cdot \gamma_{marip} + t_{Y}^{'''''} \cdot \gamma_{3B} \Big) \cdot \gamma_{peak} \Big) \cdot Y_{PN_{1}} + t_{Y}^{''''''} \cdot Y_{PN} + t_{Y}^{'''''''} \cdot Y_{ZP} + \Big( t_{I} + t_{I}^{'} \cdot \gamma_{peak} \Big) \cdot N_{I}$
+
+```{r}
+
+Y_PN1 <- database$I.PN.P1
+Y_PN1_marip <- database$I.PN.P1 * database$turnstile_marip
+Y_PN1_3B <- database$I.PN.P1 * database$turnstile_3b
+Y_PN1_peak <- database$I.PN.P1 * database$Punta
+Y_PN1_peak_marip <- database$I.PN.P1 * database$Punta * database$turnstile_marip
+Y_PN1_peak_3B <- database$I.PN.P1 * database$Punta * database$turnstile_3b
+
+Y_PN_resto <- database$I.PN.P2 + database$I.PN.P3 + database$I.PN.P4
+Y_ZP <- database$I.ZP.P1 + database$I.ZP.P2 + database$I.ZP.P3 + database$I.ZP.P4
+
+#Creating dataframe
+data.all <- data.frame(database$TEXP, 
+                       database$largo_ruta, 
+                       database$U_TRI, 
+                       database$DET,
+                       Y_PN1,
+                       Y_PN1_marip,
+                       Y_PN1_3B,
+                       Y_PN1_peak,
+                       Y_PN1_peak_marip,
+                       Y_PN1_peak_3B,
+                       Y_PN_resto,
+                       Y_ZP,
+                       database$NI, 
+                       database$NI_peak)
+
+names(data.all) <- c("texp",
+                     "largo",
+                     "TRI", 
+                     "DET",
+                     
+                     "Y_PN_P1",
+                     "Y_PN_P1_marip",
+                     "Y_PN_P1_3B",
+                     "Y_PN_P1_peak",
+                     "Y_PN_P1_peak_marip",
+                     "Y_PN_P1_peak_3B",
+                     
+                     "Y_PN",
+                     "Y_ZP",
+                     
+                     "NI",
+                     "NI_peak")
+
+
+#Fitting the model
+modelo_18 <- lm(as.formula("texp~."), data = data.all)
+summary(modelo_18)
+```
+
+Debido a algunos resultados inconsistentes de este modelo en los valores de los coeficientes asociados a los torniquetes de 3B, se utilizan dummies para las detenciones específicas para cada unidad de negocio.
+
+
+### Modelo 19
+
+El siguiente modelo, corresponde a una extensión del modelo anterior, pero considerando variables extras de detenciones dependiendo de la unidad de negocio, considerando U5 como base, $i.e.$
+
+$T = c + t_{L} \cdot L + t_{TRI} \cdot TRI + t_{s}  \cdot S + \sum_{U-U5} t_{s}^{U} \cdot S \cdot \gamma_{U} + \Big( t_{Y} + t_{Y}^{'} \cdot \gamma_{marip} + t_{Y}^{''} \cdot \gamma_{3B} + \Big(t_{Y}^{'''} + t_{Y}^{''''} \cdot \gamma_{marip} + t_{Y}^{'''''} \cdot \gamma_{3B} \Big) \cdot \gamma_{peak} \Big) \cdot Y_{PN_{1}} + t_{Y}^{''''''} \cdot Y_{PN} + t_{Y}^{'''''''} \cdot Y_{ZP} + \Big( t_{I} + t_{I}^{'} \cdot \gamma_{peak} \Big) \cdot N_{I}$
+
+```{r Modelo19, echo=FALSE}
+
+Y_PN1 <- database$I.PN.P1
+Y_PN1_marip <- database$I.PN.P1 * database$turnstile_marip
+Y_PN1_3B <- database$I.PN.P1 * database$turnstile_3b
+Y_PN1_peak <- database$I.PN.P1 * database$Punta
+Y_PN1_peak_marip <- database$I.PN.P1 * database$Punta * database$turnstile_marip
+Y_PN1_peak_3B <- database$I.PN.P1 * database$Punta * database$turnstile_3b
+
+Y_PN_resto <- database$I.PN.P2 + database$I.PN.P3 + database$I.PN.P4
+Y_ZP <- database$I.ZP.P1 + database$I.ZP.P2 + database$I.ZP.P3 + database$I.ZP.P4
+
+#Detenciones especiales por unidad (Se utiliza U5 como base)
+DET_U1 <- database$DET * database$U1
+DET_U2 <- database$DET * database$U2
+DET_U3 <- database$DET * database$U3
+DET_U4 <- database$DET * database$U4
+DET_U5 <- database$DET * database$U5
+DET_U6 <- database$DET * database$U6
+DET_U7 <- database$DET * database$U7
+
+#Creating dataframe
+data.all <- data.frame(database$TEXP, 
+                       database$largo_ruta, 
+                       database$U_TRI, 
+                       database$DET,
+                       DET_U1,
+                       DET_U2,
+                       DET_U3,
+                       DET_U4,
+                       DET_U6,
+                       DET_U7,
+                       Y_PN1,
+                       Y_PN1_marip,
+                       Y_PN1_3B,
+                       Y_PN1_peak,
+                       Y_PN1_peak_marip,
+                       Y_PN1_peak_3B,
+                       Y_PN_resto,
+                       Y_ZP,
+                       database$NI, 
+                       database$NI_peak)
+
+names(data.all) <- c("texp",
+                     "largo",
+                     "TRI", 
+                     "DET",
+                     "DET_U1",
+                     "DET_U2",
+                     "DET_U3",
+                     "DET_U4",
+                     "DET_U6",
+                     "DET_U7",
+                     
+                     "Y_PN_P1",
+                     "Y_PN_P1_marip",
+                     "Y_PN_P1_3B",
+                     "Y_PN_P1_peak",
+                     "Y_PN_P1_peak_marip",
+                     "Y_PN_P1_peak_3B",
+                     
+                     "Y_PN",
+                     "Y_ZP",
+                     
+                     "NI",
+                     "NI_peak")
+
+
+#Fitting the model
+modelo_19 <- lm(as.formula("texp~."), data = data.all)
+summary(modelo_19)
+```
+
+### Modelo 20
+
+Se eliminan variables estadísticamente no significativas el modelo queda de la siguiente forma:
+
+
+$T = c + t_{L} \cdot L + t_{TRI} \cdot TRI + t_{s}  \cdot S + \sum_{U-(U5,U6)} t_{s}^{U} \cdot S \cdot \gamma^{U} + \Big( t_{Y} + t_{Y}^{'} \cdot \gamma_{marip} + \Big(t_{Y}^{'''} + t_{Y}^{''''} \cdot \gamma_{marip} + t_{Y}^{'''''} \cdot \gamma_{3B} \Big) \cdot \gamma_{peak} \Big) \cdot Y_{PN_{1}} + t_{Y}^{''''''} \cdot Y_{PN} + t_{Y}^{'''''''} \cdot Y_{ZP} + \Big( t_{I} + t_{I}^{'} \cdot \gamma_{peak} \Big) \cdot N_{I}$
+
+```{r Modelo20, echo=FALSE}
+Y_PN1 <- database$I.PN.P1
+Y_PN1_marip <- database$I.PN.P1 * database$turnstile_marip
+Y_PN1_3B <- database$I.PN.P1 * database$turnstile_3b
+Y_PN1_peak <- database$I.PN.P1 * database$Punta
+Y_PN1_peak_marip <- database$I.PN.P1 * database$Punta * database$turnstile_marip
+Y_PN1_peak_3B <- database$I.PN.P1 * database$Punta * database$turnstile_3b
+
+Y_PN_resto <- database$I.PN.P2 + database$I.PN.P3 + database$I.PN.P4
+Y_ZP <- database$I.ZP.P1 + database$I.ZP.P2 + database$I.ZP.P3 + database$I.ZP.P4
+
+#Detenciones especiales por unidad (Se utiliza U5 como base)
+DET_U1 <- database$DET * database$U1
+DET_U2 <- database$DET * database$U2
+DET_U3 <- database$DET * database$U3
+DET_U4 <- database$DET * database$U4
+DET_U5 <- database$DET * database$U5
+DET_U6 <- database$DET * database$U6
+DET_U7 <- database$DET * database$U7
+
+#Creating dataframe
+data.all <- data.frame(database$TEXP, 
+                       database$largo_ruta, 
+                       database$U_TRI, 
+                       database$DET,
+                       DET_U1,
+                       DET_U2,
+                       DET_U3,
+                       DET_U4,
+                       DET_U7,
+                       Y_PN1,
+                       Y_PN1_marip,
+                       Y_PN1_peak,
+                       Y_PN1_peak_marip,
+                       Y_PN1_peak_3B,
+                       Y_PN_resto,
+                       Y_ZP,
+                       database$NI, 
+                       database$NI_peak)
+
+names(data.all) <- c("texp",
+                     "largo",
+                     "TRI", 
+                     "DET",
+                     "DET_U1",
+                     "DET_U2",
+                     "DET_U3",
+                     "DET_U4",
+                     "DET_U7",
+                     
+                     "Y_PN_P1",
+                     "Y_PN_P1_marip",
+                     "Y_PN_P1_peak",
+                     "Y_PN_P1_peak_marip",
+                     "Y_PN_P1_peak_3B",
+                     
+                     "Y_PN",
+                     "Y_ZP",
+                     
+                     "NI",
+                     "NI_peak")
+
+
+#Fitting the model
+modelo_20 <- lm(as.formula("texp~."), data = data.all)
+summary(modelo_20)
+```
+
+### Modelo 21
+
+Se prueba nuevamente, en el modelo anterior, la significancia del uso de torniquete de tres brazos durante periodos fuera de punta, $i.e.$
+
+$T = c + t_{L} \cdot L + t_{TRI} \cdot TRI + t_{s}  \cdot S + \sum_{U-(U5,U6)} t_{s}^{U} \cdot S \cdot \gamma^{U} + \Big( t_{Y} + t_{Y}^{'} \cdot \gamma_{marip} + t_{Y}^{''} \cdot \gamma_{3B} + \Big(t_{Y}^{'''} + t_{Y}^{''''} \cdot \gamma_{marip} + t_{Y}^{'''''} \cdot \gamma_{3B} \Big) \cdot \gamma_{peak} \Big) \cdot Y_{PN_{1}} + t_{Y}^{''''''} \cdot Y_{PN} + t_{Y}^{'''''''} \cdot Y_{ZP} + \Big( t_{I} + t_{I}^{'} \cdot \gamma_{peak} \Big) \cdot N_{I}$
+
+```{r Modelo21, echo=FALSE}
+
+Y_PN1 <- database$I.PN.P1
+Y_PN1_marip <- database$I.PN.P1 * database$turnstile_marip
+Y_PN1_3B <- database$I.PN.P1 * database$turnstile_3b
+Y_PN1_peak <- database$I.PN.P1 * database$Punta
+Y_PN1_peak_marip <- database$I.PN.P1 * database$Punta * database$turnstile_marip
+Y_PN1_peak_3B <- database$I.PN.P1 * database$Punta * database$turnstile_3b
+
+Y_PN_resto <- database$I.PN.P2 + database$I.PN.P3 + database$I.PN.P4
+Y_ZP <- database$I.ZP.P1 + database$I.ZP.P2 + database$I.ZP.P3 + database$I.ZP.P4
+
+#Detenciones especiales de U2
+DET_U1 <- database$DET * database$U1
+DET_U2 <- database$DET * database$U2
+DET_U3 <- database$DET * database$U3
+DET_U4 <- database$DET * database$U4
+DET_U5 <- database$DET * database$U5
+DET_U6 <- database$DET * database$U6
+DET_U7 <- database$DET * database$U7
+
+
+#Creating dataframe
+data.all <- data.frame(database$TEXP, 
+                       database$largo_ruta, 
+                       database$U_TRI, 
+                       database$DET,
+                       DET_U1,
+                       DET_U2,
+                       DET_U3,
+                       DET_U4,
+                       DET_U7,
+                       
+                       Y_PN1,
+                       Y_PN1_marip,
+                       Y_PN1_3B,
+                       Y_PN1_peak,
+                       Y_PN1_peak_marip,
+                       Y_PN1_peak_3B,
+                       
+                       Y_PN_resto,
+                       Y_ZP,
+                       
+                       database$NI, 
+                       database$NI_peak)
+
+names(data.all) <- c("texp",
+                     "largo",
+                     "TRI", 
+                     "DET",
+                     "DET_U1",
+                     "DET_U2",
+                     "DET_U3",
+                     "DET_U4",
+                     "DET_U7",
+                     
+                     "Y_PN_P1",
+                     "Y_PN_P1_marip",
+                     "Y_PN_P1_3B",
+                     "Y_PN_P1_peak",
+                     "Y_PN_P1_peak_marip",
+                     "Y_PN_P1_peak_3B",
+                     
+                     "Y_PN",
+                     "Y_ZP",
+                     
+                     "NI",
+                     "NI_peak")
+
+
+#Fitting the model
+modelo_21 <- lm(as.formula("texp~."), data = data.all)
+summary(modelo_21)
+```
+
+Variable asociada al uso de torniquete de tres brazos durante periodo fuera de punta sigue siendo estadísticamente no significativa en comparación al no uso de torniquete. Por su parte, valores asociados a coeficientes de uso de torniquete de tres brazos no son consistentes, observando valores menores de tiempos promedios de subidas y bajadas por pasajero en presencia de torniquete de este tipo, versus el no uso de torniquete. Por esta razón se decide seguir estimando modelos solo con la base de existencia de torniquete mariposa.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<!-- ## Especificación Peak por Demanda -->
+
+<!-- En los modelos anteriores se ha utilizado como especificación de los periodos más demandados el horario definido por Transantiago, sin embargo la estructura de la demanda puede ser distinta por recorridos. Por esta razón se utilizará una especificación distinta, y se hará en función de la demanda y no del horario de viaje. -->
+
+<!-- En los siguientes modelos se asumirá un número de personas que ingresan por paradero al bus sin afectar el tiempo de viaje, es decir, que el bus cierra sus puertas y parte independiente de que dicho número de personas aún no haya pasado a través del torniquete mariposa. -->
+
+<!-- ### Modelo 18 (X=2) -->
+
+<!-- El primer modelo es el Modelo 14, pero asumiendo un valor de X = 2, es decir, es a partir del segundo pasajero que sube al bus por paradero donde el efecto del torniquete mariposa en los tiempos de viaje es evidenciable, $i.e.$ -->
+
+<!-- $T = c + t_{L} \cdot L + t_{TRI} \cdot TRI + t_{s} \cdot S + t_{Y} \cdot Y_{PN_{1}} + \Big( t_{Y}^{'} + t_{Y}^{''} \cdot \gamma_{marip} \Big) \cdot Y_{rmte_{PN1}} + t_{Y}^{'''} \cdot Y_{PN} + t_{Y}^{''''} \cdot Y_{ZP} + \Big( t_{I} + t_{I}^{'} \cdot \gamma_{peak} \Big) \cdot N_{I}$ -->
+
+<!-- ```{r Modelo18, echo=FALSE} -->
+
+<!-- ############################################################################# -->
+<!-- #Setting working directory -->
+<!-- setwd("/Users/diego/Desktop/Evasion/01_analisis/03_datos/12_Bases_modelo/") -->
+
+<!-- #Reading input files -->
+<!-- database <- read.csv(file = "data_modelo_X2.csv", header = TRUE, sep = ";") -->
+
+<!-- #Cambiando unidad de medida de largo del recorrido (Kms.) -->
+<!-- database$largo_ruta <- database$largo_ruta/1000 -->
+
+<!-- #One hot encoding for periods of time -->
+<!-- periodos <- as.data.frame(model.matrix(~database$Periodo-1)) -->
+<!-- names(periodos) <- sprintf("P%s",3:10) -->
+<!-- periodo_punta <- periodos$P4 + periodos$P9 -->
+
+<!-- database <- cbind(database, periodos) -->
+<!-- database$Punta <- periodo_punta -->
+
+<!-- #NI peak -->
+<!-- database$NI_peak <- database$NI * periodo_punta -->
+
+<!-- #Demanda en periodo punta -->
+<!-- database$Y_peak <- database$Y * periodo_punta -->
+
+<!-- #Agregando trimestre único -->
+<!-- database$U_TRI <- database$TRI -->
+<!-- database$U_TRI[which(substr(database$FECHA,1,4) == "2017" & database$TRI == 1)] <- 5 -->
+<!-- database$U_TRI[which(substr(database$FECHA,1,4) == "2017" & database$TRI == 2)] <- 6 -->
+<!-- database$U_TRI[which(substr(database$FECHA,1,4) == "2017" & database$TRI == 3)] <- 7 -->
+<!-- database$U_TRI[which(substr(database$FECHA,1,4) == "2017" & database$TRI == 4)] <- 8 -->
+
+<!-- #Variable por presencia de torniquete de tres brazos -->
+<!-- database$turnstile_3b <- 0 -->
+<!-- database$turnstile_3b[which(database$turnstile==1 & database$turnstile_marip==0)] <- 1 -->
+
+<!-- #Demanda con torniquete mariposa y de trez brazos en periodos punta. -->
+<!-- database$Y_peak_marip <- database$Y * periodo_punta * database$turnstile_marip -->
+<!-- database$Y_peak_3b <- database$Y * periodo_punta * database$turnstile_3b -->
+
+<!-- #Demanda con torniquete mariposa y torniquete de tres brazos. -->
+<!-- database$Y_marip <- database$Y * database$turnstile_marip -->
+<!-- database$Y_3b <- database$Y * database$turnstile_3b -->
+
+
+<!-- #Se construye un dataset sin considerar torniquete de tres brazos -->
+<!-- dataset <- database[-which(database$turnstile_3b==1),] -->
+<!-- dataset$turnstile_3b <- NULL -->
+<!-- dataset$Y_peak_3b <- NULL -->
+<!-- dataset$Y_3b <- NULL -->
+<!-- ############################################################################# -->
+
+
+<!-- Y_bajo_umbral <- dataset$I.NO.EFECT.P1.PN + (dataset$I.EFECT.P1.PN - dataset$I.REM.P1.PN) -->
+<!-- Y_sobre_umbral <- dataset$I.REM.P1.PN -->
+<!-- Y_sobre_umbral_marip <- dataset$I.REM.P1.PN * dataset$turnstile_marip -->
+
+<!-- Y_PN_resto <- dataset$I.PN.P2 + dataset$I.PN.P3 + dataset$I.PN.P4 -->
+<!-- Y_ZP <- dataset$I.ZP.P1 + dataset$I.ZP.P2 + dataset$I.ZP.P3 + dataset$I.ZP.P4 -->
+
+<!-- #Creating dataframe -->
+<!-- data.all <- data.frame(dataset$TEXP, -->
+<!--                        dataset$largo_ruta, -->
+<!--                        dataset$U_TRI, -->
+<!--                        dataset$DET, -->
+<!--                        Y_bajo_umbral, -->
+<!--                        Y_sobre_umbral, -->
+<!--                        Y_sobre_umbral_marip, -->
+<!--                        Y_PN_resto, -->
+<!--                        Y_ZP, -->
+<!--                        dataset$NI, -->
+<!--                        dataset$NI_peak) -->
+
+<!-- names(data.all) <- c("texp", -->
+<!--                      "largo", -->
+<!--                      "TRI", -->
+<!--                      "DET", -->
+
+<!--                      "Y_bajo_umbral_P1", -->
+<!--                      "Y_sobre_umbral_P1", -->
+<!--                      "Y_sobre_umbral_marip_P1", -->
+
+<!--                      "Y_PN", -->
+<!--                      "Y_ZP", -->
+
+<!--                      "NI", -->
+<!--                      "NI_peak") -->
+
+
+<!-- #Fitting the model -->
+<!-- modelo_18 <- lm(as.formula("texp~."), data = data.all) -->
+<!-- summary(modelo_18) -->
+
+<!-- ``` -->
+
+<!-- ### Modelo 19 (X=3) -->
+
+<!-- $T = c + t_{L} \cdot L + t_{TRI} \cdot TRI + t_{s} \cdot S + t_{Y} \cdot Y_{PN_{1}} + \Big( t_{Y}^{'} + t_{Y}^{''} \cdot \gamma_{marip} \Big) \cdot Y_{rmte_{PN1}} + t_{Y}^{'''} \cdot Y_{PN} + t_{Y}^{''''} \cdot Y_{ZP} + \Big( t_{I} + t_{I}^{'} \cdot \gamma_{peak} \Big) \cdot N_{I}$ -->
+
+<!-- ```{r Modelo19, echo=FALSE} -->
+
+<!-- ############################################################################# -->
+<!-- #Setting working directory -->
+<!-- setwd("/Users/diego/Desktop/Evasion/01_analisis/03_datos/12_Bases_modelo/") -->
+
+<!-- #Reading input files -->
+<!-- database <- read.csv(file = "data_modelo_X3.csv", header = TRUE, sep = ";") -->
+
+<!-- #Cambiando unidad de medida de largo del recorrido (Kms.) -->
+<!-- database$largo_ruta <- database$largo_ruta/1000 -->
+
+<!-- #One hot encoding for periods of time -->
+<!-- periodos <- as.data.frame(model.matrix(~database$Periodo-1)) -->
+<!-- names(periodos) <- sprintf("P%s",3:10) -->
+<!-- periodo_punta <- periodos$P4 + periodos$P9 -->
+
+<!-- database <- cbind(database, periodos) -->
+<!-- database$Punta <- periodo_punta -->
+
+<!-- #NI peak -->
+<!-- database$NI_peak <- database$NI * periodo_punta -->
+
+<!-- #Demanda en periodo punta -->
+<!-- database$Y_peak <- database$Y * periodo_punta -->
+
+<!-- #Agregando trimestre único -->
+<!-- database$U_TRI <- database$TRI -->
+<!-- database$U_TRI[which(substr(database$FECHA,1,4) == "2017" & database$TRI == 1)] <- 5 -->
+<!-- database$U_TRI[which(substr(database$FECHA,1,4) == "2017" & database$TRI == 2)] <- 6 -->
+<!-- database$U_TRI[which(substr(database$FECHA,1,4) == "2017" & database$TRI == 3)] <- 7 -->
+<!-- database$U_TRI[which(substr(database$FECHA,1,4) == "2017" & database$TRI == 4)] <- 8 -->
+
+<!-- #Variable por presencia de torniquete de tres brazos -->
+<!-- database$turnstile_3b <- 0 -->
+<!-- database$turnstile_3b[which(database$turnstile==1 & database$turnstile_marip==0)] <- 1 -->
+
+<!-- #Demanda con torniquete mariposa y de trez brazos en periodos punta. -->
+<!-- database$Y_peak_marip <- database$Y * periodo_punta * database$turnstile_marip -->
+<!-- database$Y_peak_3b <- database$Y * periodo_punta * database$turnstile_3b -->
+
+<!-- #Demanda con torniquete mariposa y torniquete de tres brazos. -->
+<!-- database$Y_marip <- database$Y * database$turnstile_marip -->
+<!-- database$Y_3b <- database$Y * database$turnstile_3b -->
+
+
+<!-- #Se construye un dataset sin considerar torniquete de tres brazos -->
+<!-- dataset <- database[-which(database$turnstile_3b==1),] -->
+<!-- dataset$turnstile_3b <- NULL -->
+<!-- dataset$Y_peak_3b <- NULL -->
+<!-- dataset$Y_3b <- NULL -->
+<!-- ############################################################################# -->
+
+
+<!-- Y_bajo_umbral <- dataset$I.NO.EFECT.P1.PN + (dataset$I.EFECT.P1.PN - dataset$I.REM.P1.PN) -->
+<!-- Y_sobre_umbral <- dataset$I.REM.P1.PN -->
+<!-- Y_sobre_umbral_marip <- dataset$I.REM.P1.PN * dataset$turnstile_marip -->
+
+<!-- Y_PN_resto <- dataset$I.PN.P2 + dataset$I.PN.P3 + dataset$I.PN.P4 -->
+<!-- Y_ZP <- dataset$I.ZP.P1 + dataset$I.ZP.P2 + dataset$I.ZP.P3 + dataset$I.ZP.P4 -->
+
+<!-- #Creating dataframe -->
+<!-- data.all <- data.frame(dataset$TEXP, -->
+<!--                        dataset$largo_ruta, -->
+<!--                        dataset$U_TRI, -->
+<!--                        dataset$DET, -->
+<!--                        Y_bajo_umbral, -->
+<!--                        Y_sobre_umbral, -->
+<!--                        Y_sobre_umbral_marip, -->
+<!--                        Y_PN_resto, -->
+<!--                        Y_ZP, -->
+<!--                        dataset$NI, -->
+<!--                        dataset$NI_peak) -->
+
+<!-- names(data.all) <- c("texp", -->
+<!--                      "largo", -->
+<!--                      "TRI", -->
+<!--                      "DET", -->
+
+<!--                      "Y_bajo_umbral_P1", -->
+<!--                      "Y_sobre_umbral_P1", -->
+<!--                      "Y_sobre_umbral_marip_P1", -->
+
+<!--                      "Y_PN", -->
+<!--                      "Y_ZP", -->
+
+<!--                      "NI", -->
+<!--                      "NI_peak") -->
+
+
+<!-- #Fitting the model -->
+<!-- modelo_19 <- lm(as.formula("texp~."), data = data.all) -->
+<!-- summary(modelo_19) -->
+
+<!-- ``` -->
+
+
+
+<!-- ### Modelo 20 (X=4) -->
+
+<!-- $T = c + t_{L} \cdot L + t_{TRI} \cdot TRI + t_{s} \cdot S + t_{Y} \cdot Y_{PN_{1}} + \Big( t_{Y}^{'} + t_{Y}^{''} \cdot \gamma_{marip} \Big) \cdot Y_{rmte_{PN1}} + t_{Y}^{'''} \cdot Y_{PN} + t_{Y}^{''''} \cdot Y_{ZP} + \Big( t_{I} + t_{I}^{'} \cdot \gamma_{peak} \Big) \cdot N_{I}$ -->
+
+
+<!-- ```{r Modelo20, echo=FALSE} -->
+
+<!-- ############################################################################# -->
+<!-- #Setting working directory -->
+<!-- setwd("/Users/diego/Desktop/Evasion/01_analisis/03_datos/12_Bases_modelo/") -->
+
+<!-- #Reading input files -->
+<!-- database <- read.csv(file = "data_modelo_X4.csv", header = TRUE, sep = ";") -->
+
+<!-- #Cambiando unidad de medida de largo del recorrido (Kms.) -->
+<!-- database$largo_ruta <- database$largo_ruta/1000 -->
+
+<!-- #One hot encoding for periods of time -->
+<!-- periodos <- as.data.frame(model.matrix(~database$Periodo-1)) -->
+<!-- names(periodos) <- sprintf("P%s",3:10) -->
+<!-- periodo_punta <- periodos$P4 + periodos$P9 -->
+
+<!-- database <- cbind(database, periodos) -->
+<!-- database$Punta <- periodo_punta -->
+
+<!-- #NI peak -->
+<!-- database$NI_peak <- database$NI * periodo_punta -->
+
+<!-- #Demanda en periodo punta -->
+<!-- database$Y_peak <- database$Y * periodo_punta -->
+
+<!-- #Agregando trimestre único -->
+<!-- database$U_TRI <- database$TRI -->
+<!-- database$U_TRI[which(substr(database$FECHA,1,4) == "2017" & database$TRI == 1)] <- 5 -->
+<!-- database$U_TRI[which(substr(database$FECHA,1,4) == "2017" & database$TRI == 2)] <- 6 -->
+<!-- database$U_TRI[which(substr(database$FECHA,1,4) == "2017" & database$TRI == 3)] <- 7 -->
+<!-- database$U_TRI[which(substr(database$FECHA,1,4) == "2017" & database$TRI == 4)] <- 8 -->
+
+<!-- #Variable por presencia de torniquete de tres brazos -->
+<!-- database$turnstile_3b <- 0 -->
+<!-- database$turnstile_3b[which(database$turnstile==1 & database$turnstile_marip==0)] <- 1 -->
+
+<!-- #Demanda con torniquete mariposa y de trez brazos en periodos punta. -->
+<!-- database$Y_peak_marip <- database$Y * periodo_punta * database$turnstile_marip -->
+<!-- database$Y_peak_3b <- database$Y * periodo_punta * database$turnstile_3b -->
+
+<!-- #Demanda con torniquete mariposa y torniquete de tres brazos. -->
+<!-- database$Y_marip <- database$Y * database$turnstile_marip -->
+<!-- database$Y_3b <- database$Y * database$turnstile_3b -->
+
+
+<!-- #Se construye un dataset sin considerar torniquete de tres brazos -->
+<!-- dataset <- database[-which(database$turnstile_3b==1),] -->
+<!-- dataset$turnstile_3b <- NULL -->
+<!-- dataset$Y_peak_3b <- NULL -->
+<!-- dataset$Y_3b <- NULL -->
+<!-- ############################################################################# -->
+
+
+<!-- Y_bajo_umbral <- dataset$I.NO.EFECT.P1.PN + (dataset$I.EFECT.P1.PN - dataset$I.REM.P1.PN) -->
+<!-- Y_sobre_umbral <- dataset$I.REM.P1.PN -->
+<!-- Y_sobre_umbral_marip <- dataset$I.REM.P1.PN * dataset$turnstile_marip -->
+
+<!-- Y_PN_resto <- dataset$I.PN.P2 + dataset$I.PN.P3 + dataset$I.PN.P4 -->
+<!-- Y_ZP <- dataset$I.ZP.P1 + dataset$I.ZP.P2 + dataset$I.ZP.P3 + dataset$I.ZP.P4 -->
+
+<!-- #Creating dataframe -->
+<!-- data.all <- data.frame(dataset$TEXP, -->
+<!--                        dataset$largo_ruta, -->
+<!--                        dataset$U_TRI, -->
+<!--                        dataset$DET, -->
+<!--                        Y_bajo_umbral, -->
+<!--                        Y_sobre_umbral, -->
+<!--                        Y_sobre_umbral_marip, -->
+<!--                        Y_PN_resto, -->
+<!--                        Y_ZP, -->
+<!--                        dataset$NI, -->
+<!--                        dataset$NI_peak) -->
+
+<!-- names(data.all) <- c("texp", -->
+<!--                      "largo", -->
+<!--                      "TRI", -->
+<!--                      "DET", -->
+
+<!--                      "Y_bajo_umbral_P1", -->
+<!--                      "Y_sobre_umbral_P1", -->
+<!--                      "Y_sobre_umbral_marip_P1", -->
+
+<!--                      "Y_PN", -->
+<!--                      "Y_ZP", -->
+
+<!--                      "NI", -->
+<!--                      "NI_peak") -->
+
+
+<!-- #Fitting the model -->
+<!-- modelo_20 <- lm(as.formula("texp~."), data = data.all) -->
+<!-- summary(modelo_20) -->
+
+<!-- ``` -->
+
+
+<!-- ### Modelo 21 (X=5) -->
+
+<!-- $T = c + t_{L} \cdot L + t_{TRI} \cdot TRI + t_{s} \cdot S + t_{Y} \cdot Y_{PN_{1}} + \Big( t_{Y}^{'} + t_{Y}^{''} \cdot \gamma_{marip} \Big) \cdot Y_{rmte_{PN1}} + t_{Y}^{'''} \cdot Y_{PN} + t_{Y}^{''''} \cdot Y_{ZP} + \Big( t_{I} + t_{I}^{'} \cdot \gamma_{peak} \Big) \cdot N_{I}$ -->
+
+<!-- ```{r Modelo21, echo=FALSE} -->
+<!-- ############################################################################# -->
+<!-- #Setting working directory -->
+<!-- setwd("/Users/diego/Desktop/Evasion/01_analisis/03_datos/12_Bases_modelo/") -->
+
+<!-- #Reading input files -->
+<!-- database <- read.csv(file = "data_modelo_X5.csv", header = TRUE, sep = ";") -->
+
+<!-- #Cambiando unidad de medida de largo del recorrido (Kms.) -->
+<!-- database$largo_ruta <- database$largo_ruta/1000 -->
+
+<!-- #One hot encoding for periods of time -->
+<!-- periodos <- as.data.frame(model.matrix(~database$Periodo-1)) -->
+<!-- names(periodos) <- sprintf("P%s",3:10) -->
+<!-- periodo_punta <- periodos$P4 + periodos$P9 -->
+
+<!-- database <- cbind(database, periodos) -->
+<!-- database$Punta <- periodo_punta -->
+
+<!-- #NI peak -->
+<!-- database$NI_peak <- database$NI * periodo_punta -->
+
+<!-- #Demanda en periodo punta -->
+<!-- database$Y_peak <- database$Y * periodo_punta -->
+
+<!-- #Agregando trimestre único -->
+<!-- database$U_TRI <- database$TRI -->
+<!-- database$U_TRI[which(substr(database$FECHA,1,4) == "2017" & database$TRI == 1)] <- 5 -->
+<!-- database$U_TRI[which(substr(database$FECHA,1,4) == "2017" & database$TRI == 2)] <- 6 -->
+<!-- database$U_TRI[which(substr(database$FECHA,1,4) == "2017" & database$TRI == 3)] <- 7 -->
+<!-- database$U_TRI[which(substr(database$FECHA,1,4) == "2017" & database$TRI == 4)] <- 8 -->
+
+<!-- #Variable por presencia de torniquete de tres brazos -->
+<!-- database$turnstile_3b <- 0 -->
+<!-- database$turnstile_3b[which(database$turnstile==1 & database$turnstile_marip==0)] <- 1 -->
+
+<!-- #Demanda con torniquete mariposa y de trez brazos en periodos punta. -->
+<!-- database$Y_peak_marip <- database$Y * periodo_punta * database$turnstile_marip -->
+<!-- database$Y_peak_3b <- database$Y * periodo_punta * database$turnstile_3b -->
+
+<!-- #Demanda con torniquete mariposa y torniquete de tres brazos. -->
+<!-- database$Y_marip <- database$Y * database$turnstile_marip -->
+<!-- database$Y_3b <- database$Y * database$turnstile_3b -->
+
+
+<!-- #Se construye un dataset sin considerar torniquete de tres brazos -->
+<!-- dataset <- database[-which(database$turnstile_3b==1),] -->
+<!-- dataset$turnstile_3b <- NULL -->
+<!-- dataset$Y_peak_3b <- NULL -->
+<!-- dataset$Y_3b <- NULL -->
+<!-- ############################################################################# -->
+
+
+<!-- Y_bajo_umbral <- dataset$I.NO.EFECT.P1.PN + (dataset$I.EFECT.P1.PN - dataset$I.REM.P1.PN) -->
+<!-- Y_sobre_umbral <- dataset$I.REM.P1.PN -->
+<!-- Y_sobre_umbral_marip <- dataset$I.REM.P1.PN * dataset$turnstile_marip -->
+
+<!-- Y_PN_resto <- dataset$I.PN.P2 + dataset$I.PN.P3 + dataset$I.PN.P4 -->
+<!-- Y_ZP <- dataset$I.ZP.P1 + dataset$I.ZP.P2 + dataset$I.ZP.P3 + dataset$I.ZP.P4 -->
+
+<!-- #Creating dataframe -->
+<!-- data.all <- data.frame(dataset$TEXP, -->
+<!--                        dataset$largo_ruta, -->
+<!--                        dataset$U_TRI, -->
+<!--                        dataset$DET, -->
+<!--                        Y_bajo_umbral, -->
+<!--                        Y_sobre_umbral, -->
+<!--                        Y_sobre_umbral_marip, -->
+<!--                        Y_PN_resto, -->
+<!--                        Y_ZP, -->
+<!--                        dataset$NI, -->
+<!--                        dataset$NI_peak) -->
+
+<!-- names(data.all) <- c("texp", -->
+<!--                      "largo", -->
+<!--                      "TRI", -->
+<!--                      "DET", -->
+
+<!--                      "Y_bajo_umbral_P1", -->
+<!--                      "Y_sobre_umbral_P1", -->
+<!--                      "Y_sobre_umbral_marip_P1", -->
+
+<!--                      "Y_PN", -->
+<!--                      "Y_ZP", -->
+
+<!--                      "NI", -->
+<!--                      "NI_peak") -->
+
+
+<!-- #Fitting the model -->
+<!-- modelo_21 <- lm(as.formula("texp~."), data = data.all) -->
+<!-- summary(modelo_21) -->
+<!-- ``` -->
+
+
+<!-- ### Modelo 22 (X=6) -->
+
+<!-- $T = c + t_{L} \cdot L + t_{TRI} \cdot TRI + t_{s} \cdot S + t_{Y} \cdot Y_{PN_{1}} + \Big( t_{Y}^{'} + t_{Y}^{''} \cdot \gamma_{marip} \Big) \cdot Y_{rmte_{PN1}} + t_{Y}^{'''} \cdot Y_{PN} + t_{Y}^{''''} \cdot Y_{ZP} + \Big( t_{I} + t_{I}^{'} \cdot \gamma_{peak} \Big) \cdot N_{I}$ -->
+
+<!-- ```{r Modelo22, echo=FALSE} -->
+
+<!-- ############################################################################# -->
+<!-- #Setting working directory -->
+<!-- setwd("/Users/diego/Desktop/Evasion/01_analisis/03_datos/12_Bases_modelo/") -->
+
+<!-- #Reading input files -->
+<!-- database <- read.csv(file = "data_modelo_X6.csv", header = TRUE, sep = ";") -->
+
+<!-- #Cambiando unidad de medida de largo del recorrido (Kms.) -->
+<!-- database$largo_ruta <- database$largo_ruta/1000 -->
+
+<!-- #One hot encoding for periods of time -->
+<!-- periodos <- as.data.frame(model.matrix(~database$Periodo-1)) -->
+<!-- names(periodos) <- sprintf("P%s",3:10) -->
+<!-- periodo_punta <- periodos$P4 + periodos$P9 -->
+
+<!-- database <- cbind(database, periodos) -->
+<!-- database$Punta <- periodo_punta -->
+
+<!-- #NI peak -->
+<!-- database$NI_peak <- database$NI * periodo_punta -->
+
+<!-- #Demanda en periodo punta -->
+<!-- database$Y_peak <- database$Y * periodo_punta -->
+
+<!-- #Agregando trimestre único -->
+<!-- database$U_TRI <- database$TRI -->
+<!-- database$U_TRI[which(substr(database$FECHA,1,4) == "2017" & database$TRI == 1)] <- 5 -->
+<!-- database$U_TRI[which(substr(database$FECHA,1,4) == "2017" & database$TRI == 2)] <- 6 -->
+<!-- database$U_TRI[which(substr(database$FECHA,1,4) == "2017" & database$TRI == 3)] <- 7 -->
+<!-- database$U_TRI[which(substr(database$FECHA,1,4) == "2017" & database$TRI == 4)] <- 8 -->
+
+<!-- #Variable por presencia de torniquete de tres brazos -->
+<!-- database$turnstile_3b <- 0 -->
+<!-- database$turnstile_3b[which(database$turnstile==1 & database$turnstile_marip==0)] <- 1 -->
+
+<!-- #Demanda con torniquete mariposa y de trez brazos en periodos punta. -->
+<!-- database$Y_peak_marip <- database$Y * periodo_punta * database$turnstile_marip -->
+<!-- database$Y_peak_3b <- database$Y * periodo_punta * database$turnstile_3b -->
+
+<!-- #Demanda con torniquete mariposa y torniquete de tres brazos. -->
+<!-- database$Y_marip <- database$Y * database$turnstile_marip -->
+<!-- database$Y_3b <- database$Y * database$turnstile_3b -->
+
+
+<!-- #Se construye un dataset sin considerar torniquete de tres brazos -->
+<!-- dataset <- database[-which(database$turnstile_3b==1),] -->
+<!-- dataset$turnstile_3b <- NULL -->
+<!-- dataset$Y_peak_3b <- NULL -->
+<!-- dataset$Y_3b <- NULL -->
+<!-- ############################################################################# -->
+
+
+<!-- Y_bajo_umbral <- dataset$I.NO.EFECT.P1.PN + (dataset$I.EFECT.P1.PN - dataset$I.REM.P1.PN) -->
+<!-- Y_sobre_umbral <- dataset$I.REM.P1.PN -->
+<!-- Y_sobre_umbral_marip <- dataset$I.REM.P1.PN * dataset$turnstile_marip -->
+
+<!-- Y_PN_resto <- dataset$I.PN.P2 + dataset$I.PN.P3 + dataset$I.PN.P4 -->
+<!-- Y_ZP <- dataset$I.ZP.P1 + dataset$I.ZP.P2 + dataset$I.ZP.P3 + dataset$I.ZP.P4 -->
+
+<!-- #Creating dataframe -->
+<!-- data.all <- data.frame(dataset$TEXP, -->
+<!--                        dataset$largo_ruta, -->
+<!--                        dataset$U_TRI, -->
+<!--                        dataset$DET, -->
+<!--                        Y_bajo_umbral, -->
+<!--                        Y_sobre_umbral, -->
+<!--                        Y_sobre_umbral_marip, -->
+<!--                        Y_PN_resto, -->
+<!--                        Y_ZP, -->
+<!--                        dataset$NI, -->
+<!--                        dataset$NI_peak) -->
+
+<!-- names(data.all) <- c("texp", -->
+<!--                      "largo", -->
+<!--                      "TRI", -->
+<!--                      "DET", -->
+
+<!--                      "Y_bajo_umbral_P1", -->
+<!--                      "Y_sobre_umbral_P1", -->
+<!--                      "Y_sobre_umbral_marip_P1", -->
+
+<!--                      "Y_PN", -->
+<!--                      "Y_ZP", -->
+
+<!--                      "NI", -->
+<!--                      "NI_peak") -->
+
+
+<!-- #Fitting the model -->
+<!-- modelo_22 <- lm(as.formula("texp~."), data = data.all) -->
+<!-- summary(modelo_22) -->
+
+<!-- ``` -->
+
+
+<!-- ### Modelo 23 (X=7) -->
+
+<!-- $T = c + t_{L} \cdot L + t_{TRI} \cdot TRI + t_{s} \cdot S + t_{Y} \cdot Y_{PN_{1}} + \Big( t_{Y}^{'} + t_{Y}^{''} \cdot \gamma_{marip} \Big) \cdot Y_{rmte_{PN1}} + t_{Y}^{'''} \cdot Y_{PN} + t_{Y}^{''''} \cdot Y_{ZP} + \Big( t_{I} + t_{I}^{'} \cdot \gamma_{peak} \Big) \cdot N_{I}$ -->
+
+<!-- ```{r Modelo23, echo=FALSE} -->
+<!-- ############################################################################# -->
+<!-- #Setting working directory -->
+<!-- setwd("/Users/diego/Desktop/Evasion/01_analisis/03_datos/12_Bases_modelo/") -->
+
+<!-- #Reading input files -->
+<!-- database <- read.csv(file = "data_modelo_X7.csv", header = TRUE, sep = ";") -->
+
+<!-- #Cambiando unidad de medida de largo del recorrido (Kms.) -->
+<!-- database$largo_ruta <- database$largo_ruta/1000 -->
+
+<!-- #One hot encoding for periods of time -->
+<!-- periodos <- as.data.frame(model.matrix(~database$Periodo-1)) -->
+<!-- names(periodos) <- sprintf("P%s",3:10) -->
+<!-- periodo_punta <- periodos$P4 + periodos$P9 -->
+
+<!-- database <- cbind(database, periodos) -->
+<!-- database$Punta <- periodo_punta -->
+
+<!-- #NI peak -->
+<!-- database$NI_peak <- database$NI * periodo_punta -->
+
+<!-- #Demanda en periodo punta -->
+<!-- database$Y_peak <- database$Y * periodo_punta -->
+
+<!-- #Agregando trimestre único -->
+<!-- database$U_TRI <- database$TRI -->
+<!-- database$U_TRI[which(substr(database$FECHA,1,4) == "2017" & database$TRI == 1)] <- 5 -->
+<!-- database$U_TRI[which(substr(database$FECHA,1,4) == "2017" & database$TRI == 2)] <- 6 -->
+<!-- database$U_TRI[which(substr(database$FECHA,1,4) == "2017" & database$TRI == 3)] <- 7 -->
+<!-- database$U_TRI[which(substr(database$FECHA,1,4) == "2017" & database$TRI == 4)] <- 8 -->
+
+<!-- #Variable por presencia de torniquete de tres brazos -->
+<!-- database$turnstile_3b <- 0 -->
+<!-- database$turnstile_3b[which(database$turnstile==1 & database$turnstile_marip==0)] <- 1 -->
+
+<!-- #Demanda con torniquete mariposa y de trez brazos en periodos punta. -->
+<!-- database$Y_peak_marip <- database$Y * periodo_punta * database$turnstile_marip -->
+<!-- database$Y_peak_3b <- database$Y * periodo_punta * database$turnstile_3b -->
+
+<!-- #Demanda con torniquete mariposa y torniquete de tres brazos. -->
+<!-- database$Y_marip <- database$Y * database$turnstile_marip -->
+<!-- database$Y_3b <- database$Y * database$turnstile_3b -->
+
+
+<!-- #Se construye un dataset sin considerar torniquete de tres brazos -->
+<!-- dataset <- database[-which(database$turnstile_3b==1),] -->
+<!-- dataset$turnstile_3b <- NULL -->
+<!-- dataset$Y_peak_3b <- NULL -->
+<!-- dataset$Y_3b <- NULL -->
+<!-- ############################################################################# -->
+
+
+<!-- Y_bajo_umbral <- dataset$I.NO.EFECT.P1.PN + (dataset$I.EFECT.P1.PN - dataset$I.REM.P1.PN) -->
+<!-- Y_sobre_umbral <- dataset$I.REM.P1.PN -->
+<!-- Y_sobre_umbral_marip <- dataset$I.REM.P1.PN * dataset$turnstile_marip -->
+
+<!-- Y_PN_resto <- dataset$I.PN.P2 + dataset$I.PN.P3 + dataset$I.PN.P4 -->
+<!-- Y_ZP <- dataset$I.ZP.P1 + dataset$I.ZP.P2 + dataset$I.ZP.P3 + dataset$I.ZP.P4 -->
+
+<!-- #Creating dataframe -->
+<!-- data.all <- data.frame(dataset$TEXP, -->
+<!--                        dataset$largo_ruta, -->
+<!--                        dataset$U_TRI, -->
+<!--                        dataset$DET, -->
+<!--                        Y_bajo_umbral, -->
+<!--                        Y_sobre_umbral, -->
+<!--                        Y_sobre_umbral_marip, -->
+<!--                        Y_PN_resto, -->
+<!--                        Y_ZP, -->
+<!--                        dataset$NI, -->
+<!--                        dataset$NI_peak) -->
+
+<!-- names(data.all) <- c("texp", -->
+<!--                      "largo", -->
+<!--                      "TRI", -->
+<!--                      "DET", -->
+
+<!--                      "Y_bajo_umbral_P1", -->
+<!--                      "Y_sobre_umbral_P1", -->
+<!--                      "Y_sobre_umbral_marip_P1", -->
+
+<!--                      "Y_PN", -->
+<!--                      "Y_ZP", -->
+
+<!--                      "NI", -->
+<!--                      "NI_peak") -->
+
+
+<!-- #Fitting the model -->
+<!-- modelo_23 <- lm(as.formula("texp~."), data = data.all) -->
+<!-- summary(modelo_23) -->
+<!-- ``` -->
+
+
+<!-- ### Modelo 24 (X=8) -->
+
+<!-- $T = c + t_{L} \cdot L + t_{TRI} \cdot TRI + t_{s} \cdot S + t_{Y} \cdot Y_{PN_{1}} + \Big( t_{Y}^{'} + t_{Y}^{''} \cdot \gamma_{marip} \Big) \cdot Y_{rmte_{PN1}} + t_{Y}^{'''} \cdot Y_{PN} + t_{Y}^{''''} \cdot Y_{ZP} + \Big( t_{I} + t_{I}^{'} \cdot \gamma_{peak} \Big) \cdot N_{I}$ -->
+
+<!-- ```{r Modelo24, echo=FALSE} -->
+
+<!-- ############################################################################# -->
+<!-- #Setting working directory -->
+<!-- setwd("/Users/diego/Desktop/Evasion/01_analisis/03_datos/12_Bases_modelo/") -->
+
+<!-- #Reading input files -->
+<!-- database <- read.csv(file = "data_modelo_X8.csv", header = TRUE, sep = ";") -->
+
+<!-- #Cambiando unidad de medida de largo del recorrido (Kms.) -->
+<!-- database$largo_ruta <- database$largo_ruta/1000 -->
+
+<!-- #One hot encoding for periods of time -->
+<!-- periodos <- as.data.frame(model.matrix(~database$Periodo-1)) -->
+<!-- names(periodos) <- sprintf("P%s",3:10) -->
+<!-- periodo_punta <- periodos$P4 + periodos$P9 -->
+
+<!-- database <- cbind(database, periodos) -->
+<!-- database$Punta <- periodo_punta -->
+
+<!-- #NI peak -->
+<!-- database$NI_peak <- database$NI * periodo_punta -->
+
+<!-- #Demanda en periodo punta -->
+<!-- database$Y_peak <- database$Y * periodo_punta -->
+
+<!-- #Agregando trimestre único -->
+<!-- database$U_TRI <- database$TRI -->
+<!-- database$U_TRI[which(substr(database$FECHA,1,4) == "2017" & database$TRI == 1)] <- 5 -->
+<!-- database$U_TRI[which(substr(database$FECHA,1,4) == "2017" & database$TRI == 2)] <- 6 -->
+<!-- database$U_TRI[which(substr(database$FECHA,1,4) == "2017" & database$TRI == 3)] <- 7 -->
+<!-- database$U_TRI[which(substr(database$FECHA,1,4) == "2017" & database$TRI == 4)] <- 8 -->
+
+<!-- #Variable por presencia de torniquete de tres brazos -->
+<!-- database$turnstile_3b <- 0 -->
+<!-- database$turnstile_3b[which(database$turnstile==1 & database$turnstile_marip==0)] <- 1 -->
+
+<!-- #Demanda con torniquete mariposa y de trez brazos en periodos punta. -->
+<!-- database$Y_peak_marip <- database$Y * periodo_punta * database$turnstile_marip -->
+<!-- database$Y_peak_3b <- database$Y * periodo_punta * database$turnstile_3b -->
+
+<!-- #Demanda con torniquete mariposa y torniquete de tres brazos. -->
+<!-- database$Y_marip <- database$Y * database$turnstile_marip -->
+<!-- database$Y_3b <- database$Y * database$turnstile_3b -->
+
+
+<!-- #Se construye un dataset sin considerar torniquete de tres brazos -->
+<!-- dataset <- database[-which(database$turnstile_3b==1),] -->
+<!-- dataset$turnstile_3b <- NULL -->
+<!-- dataset$Y_peak_3b <- NULL -->
+<!-- dataset$Y_3b <- NULL -->
+<!-- ############################################################################# -->
+
+
+<!-- Y_bajo_umbral <- dataset$I.NO.EFECT.P1.PN + (dataset$I.EFECT.P1.PN - dataset$I.REM.P1.PN) -->
+<!-- Y_sobre_umbral <- dataset$I.REM.P1.PN -->
+<!-- Y_sobre_umbral_marip <- dataset$I.REM.P1.PN * dataset$turnstile_marip -->
+
+<!-- Y_PN_resto <- dataset$I.PN.P2 + dataset$I.PN.P3 + dataset$I.PN.P4 -->
+<!-- Y_ZP <- dataset$I.ZP.P1 + dataset$I.ZP.P2 + dataset$I.ZP.P3 + dataset$I.ZP.P4 -->
+
+<!-- #Creating dataframe -->
+<!-- data.all <- data.frame(dataset$TEXP, -->
+<!--                        dataset$largo_ruta, -->
+<!--                        dataset$U_TRI, -->
+<!--                        dataset$DET, -->
+<!--                        Y_bajo_umbral, -->
+<!--                        Y_sobre_umbral, -->
+<!--                        Y_sobre_umbral_marip, -->
+<!--                        Y_PN_resto, -->
+<!--                        Y_ZP, -->
+<!--                        dataset$NI, -->
+<!--                        dataset$NI_peak) -->
+
+<!-- names(data.all) <- c("texp", -->
+<!--                      "largo", -->
+<!--                      "TRI", -->
+<!--                      "DET", -->
+
+<!--                      "Y_bajo_umbral_P1", -->
+<!--                      "Y_sobre_umbral_P1", -->
+<!--                      "Y_sobre_umbral_marip_P1", -->
+
+<!--                      "Y_PN", -->
+<!--                      "Y_ZP", -->
+
+<!--                      "NI", -->
+<!--                      "NI_peak") -->
+
+
+<!-- #Fitting the model -->
+<!-- modelo_24 <- lm(as.formula("texp~."), data = data.all) -->
+<!-- summary(modelo_24) -->
+
+<!-- ``` -->
+
+
+<!-- ## Dummies por ruta -->
+
+<!-- Debido a la imposibilidad de cálculo del número de intersecciones semaforizadas de manera rigurosa (bases poco prolijas) y a probable correlación entre el número de intersecciones semaforizadas con el número de detenciones (0.62) se decide probar con dummies por cada una de las rutas (servicio-sentido). Esto tiene a su vez como argumento que el número de intersecciones y paraderos son características en generales propias del trazado del servicio-sentido. Este modelo, además considera el largo del recorrido y la demanda como variables explicativas del tiempo de viaje. Este procedimiento, permitirá además determinar la robustez de los modelos presentados anteriormente. -->
+
+<!-- Dentro del modelo finalmente reportado, solo se consideran variables de rutas estadísticamente significativas, eliminando a través de un loop todas aquellas que no lo sean en cada iteración. -->
+
+<!-- ### Modelo 25 -->
+
+<!-- Este modelo es el mejor especificado en la demanda, pero utilizando dummies por servicio - sentido. -->
+
+<!-- $T = c + \Big( t_{Y} + t_{Y}^{'} \cdot \gamma_{marip} + \Big(t_{Y}^{''} + t_{Y}^{'''} \cdot \gamma_{marip}  \Big) \cdot \gamma_{peak} \Big) \cdot Y_{PN_{1}} + t_{Y}^{'''''} \cdot Y_{PN} + t_{Y}^{''''} \cdot Y_{ZP}  +  \sum_{r}  t_{r} \cdot  \gamma_{r}$ -->
+
+<!-- ```{r Modelo25, echo=FALSE} -->
+
+<!-- #Variables asociadas a transferencia de pasajeros -->
+<!-- Y_PN1 <- dataset$I.PN.P1 -->
+<!-- Y_PN1_marip <- dataset$I.PN.P1 * dataset$turnstile_marip -->
+<!-- Y_PN1_peak <- dataset$I.PN.P1 * dataset$Punta -->
+<!-- Y_PN1_peak_marip <- dataset$I.PN.P1 * dataset$Punta * dataset$turnstile_marip -->
+
+<!-- Y_PN_resto <- dataset$I.PN.P2 + dataset$I.PN.P3 + dataset$I.PN.P4 -->
+<!-- Y_ZP <- dataset$I.ZP.P1 + dataset$I.ZP.P2 + dataset$I.ZP.P3 + dataset$I.ZP.P4 -->
+
+
+<!-- #Variables dummies por servicio-sentido -->
+<!-- dataset$COD_USU_SENTIDO <- as.character(dataset$COD_USU_SENTIDO) -->
+<!-- rutas <- as.data.frame(model.matrix(~dataset$COD_USU_SENTIDO-1)) -->
+<!-- names(rutas) <- substr(names(rutas),nchar(names(rutas)) - 3,nchar(names(rutas))) -->
+
+<!-- #Deleting route 101I (base) -->
+<!-- rutas <- rutas[,-1] -->
+
+<!-- ind_pvalor <- length(dataset) -->
+
+
+<!-- while(length(ind_pvalor) != 0){ -->
+
+<!--   data.all <- data.frame(dataset$TEXP, -->
+<!--                          Y_PN1, -->
+<!--                          Y_PN1_marip, -->
+<!--                          Y_PN1_peak, -->
+<!--                          Y_PN1_peak_marip, -->
+<!--                          Y_PN_resto, -->
+<!--                          Y_ZP) -->
+
+<!--   names(data.all) <- c("texp", -->
+<!--                        "Y_PN_P1", -->
+<!--                        "Y_PN_P1_marip", -->
+<!--                        "Y_PN_P1_peak", -->
+<!--                        "Y_PN_P1_peak_marip", -->
+<!--                        "Y_PN", -->
+<!--                        "Y_ZP") -->
+
+<!--   data.all <- cbind(data.all, rutas) -->
+
+<!--   modelo_25 <- lm(as.formula("texp~."), data = data.all) -->
+<!--   test_summary <- data.frame(summary(modelo_25)[[4]]) -->
+<!--   test_summary <- test_summary[8:nrow(test_summary),] -->
+
+<!--   ind_pvalor <- which(test_summary$Pr...t.. > 0.05) -->
+
+<!--   #Keeping routes statistically significant -->
+<!--   if(length(ind_pvalor != 0)){rutas <- rutas[,-ind_pvalor]} -->
+<!-- } -->
+
+<!-- summary(modelo_25) -->
+
+<!-- ``` -->
+
+
+<!-- ### Modelo 26 -->
+
+<!-- Extensión del modelo anterior. Se agrega el largo del recorrido. -->
+
+<!-- $T = c + t_{L} \cdot L + \Big( t_{Y} + t_{Y}^{'} \cdot \gamma_{marip} + \Big(t_{Y}^{''} + t_{Y}^{'''} \cdot \gamma_{marip}  \Big) \cdot \gamma_{peak} \Big) \cdot Y_{PN_{1}} + t_{Y}^{'''''} \cdot Y_{PN} + t_{Y}^{''''} \cdot Y_{ZP}  +  \sum_{r}  t_{r} \cdot  \gamma_{r}$ -->
+
+<!-- ```{r Modelo26, echo=FALSE} -->
+<!-- #Variables asociadas a transferencia de pasajeros -->
+<!-- Y_PN1 <- dataset$I.PN.P1 -->
+<!-- Y_PN1_marip <- dataset$I.PN.P1 * dataset$turnstile_marip -->
+<!-- Y_PN1_peak <- dataset$I.PN.P1 * dataset$Punta -->
+<!-- Y_PN1_peak_marip <- dataset$I.PN.P1 * dataset$Punta * dataset$turnstile_marip -->
+
+<!-- Y_PN_resto <- dataset$I.PN.P2 + dataset$I.PN.P3 + dataset$I.PN.P4 -->
+<!-- Y_ZP <- dataset$I.ZP.P1 + dataset$I.ZP.P2 + dataset$I.ZP.P3 + dataset$I.ZP.P4 -->
+
+
+<!-- #Variables dummies por servicio-sentido -->
+<!-- dataset$COD_USU_SENTIDO <- as.character(dataset$COD_USU_SENTIDO) -->
+<!-- rutas <- as.data.frame(model.matrix(~dataset$COD_USU_SENTIDO-1)) -->
+<!-- names(rutas) <- substr(names(rutas),nchar(names(rutas)) - 3,nchar(names(rutas))) -->
+
+<!-- #Deleting route 101I (base) -->
+<!-- rutas <- rutas[,-1] -->
+
+<!-- ind_pvalor <- length(dataset) -->
+
+
+<!-- while(length(ind_pvalor) != 0){ -->
+
+<!--   data.all <- data.frame(dataset$TEXP, -->
+<!--                          dataset$largo_ruta, -->
+<!--                          Y_PN1, -->
+<!--                          Y_PN1_marip, -->
+<!--                          Y_PN1_peak, -->
+<!--                          Y_PN1_peak_marip, -->
+<!--                          Y_PN_resto, -->
+<!--                          Y_ZP) -->
+
+<!--   names(data.all) <- c("texp", -->
+<!--                        "largo", -->
+<!--                        "Y_PN_P1", -->
+<!--                        "Y_PN_P1_marip", -->
+<!--                        "Y_PN_P1_peak", -->
+<!--                        "Y_PN_P1_peak_marip", -->
+<!--                        "Y_PN", -->
+<!--                        "Y_ZP") -->
+
+<!--   data.all <- cbind(data.all, rutas) -->
+
+<!--   modelo_26 <- lm(as.formula("texp~."), data = data.all) -->
+<!--   test_summary <- data.frame(summary(modelo_26)[[4]]) -->
+<!--   test_summary <- test_summary[9:nrow(test_summary),] -->
+
+<!--   ind_pvalor <- which(test_summary$Pr...t.. > 0.05) -->
+
+<!--   #Keeping routes statistically significant -->
+<!--   if(length(ind_pvalor != 0)){rutas <- rutas[,-ind_pvalor]} -->
+<!-- } -->
+
+<!-- summary(modelo_26) -->
+<!-- ``` -->
+
+<!-- ### Modelo 27 -->
+
+<!-- Modelo 25 pero agregando variable asociada al TRImestre de medición. -->
+
+<!-- $T = c + t_{TRI} \cdot TRI + \Big( t_{Y} + t_{Y}^{'} \cdot \gamma_{marip} + \Big(t_{Y}^{''} + t_{Y}^{'''} \cdot \gamma_{marip}  \Big) \cdot \gamma_{peak} \Big) \cdot Y_{PN_{1}} + t_{Y}^{'''''} \cdot Y_{PN} + t_{Y}^{''''} \cdot Y_{ZP}  +  \sum_{r}  t_{r} \cdot  \gamma_{r}$ -->
+
+<!-- ```{r Modelo27, echo=FALSE} -->
+
+<!-- Y_PN1 <- dataset$I.PN.P1 -->
+<!-- Y_PN1_marip <- dataset$I.PN.P1 * dataset$turnstile_marip -->
+<!-- Y_PN1_peak <- dataset$I.PN.P1 * dataset$Punta -->
+<!-- Y_PN1_peak_marip <- dataset$I.PN.P1 * dataset$Punta * dataset$turnstile_marip -->
+
+<!-- Y_PN_resto <- dataset$I.PN.P2 + dataset$I.PN.P3 + dataset$I.PN.P4 -->
+<!-- Y_ZP <- dataset$I.ZP.P1 + dataset$I.ZP.P2 + dataset$I.ZP.P3 + dataset$I.ZP.P4 -->
+
+
+<!-- #Variables dummies por servicio-sentido -->
+<!-- dataset$COD_USU_SENTIDO <- as.character(dataset$COD_USU_SENTIDO) -->
+<!-- rutas <- as.data.frame(model.matrix(~dataset$COD_USU_SENTIDO-1)) -->
+<!-- names(rutas) <- substr(names(rutas),nchar(names(rutas)) - 3,nchar(names(rutas))) -->
+
+<!-- #Deleting route 101I (base) -->
+<!-- rutas <- rutas[,-1] -->
+
+<!-- ind_pvalor <- length(dataset) -->
+
+
+<!-- while(length(ind_pvalor) != 0){ -->
+
+<!--   data.all <- data.frame(dataset$TEXP, -->
+<!--                          dataset$U_TRI, -->
+<!--                          Y_PN1, -->
+<!--                          Y_PN1_marip, -->
+<!--                          Y_PN1_peak, -->
+<!--                          Y_PN1_peak_marip, -->
+<!--                          Y_PN_resto, -->
+<!--                          Y_ZP) -->
+
+<!--   names(data.all) <- c("texp", -->
+<!--                        "TRI", -->
+<!--                        "Y_PN_P1", -->
+<!--                        "Y_PN_P1_marip", -->
+<!--                        "Y_PN_P1_peak", -->
+<!--                        "Y_PN_P1_peak_marip", -->
+<!--                        "Y_PN", -->
+<!--                        "Y_ZP") -->
+
+<!--   data.all <- cbind(data.all, rutas) -->
+
+<!--   modelo_27 <- lm(as.formula("texp~."), data = data.all) -->
+<!--   test_summary <- data.frame(summary(modelo_27)[[4]]) -->
+<!--   test_summary <- test_summary[9:nrow(test_summary),] -->
+
+<!--   ind_pvalor <- which(test_summary$Pr...t.. > 0.05) -->
+
+<!--   #Keeping routes statistically significant -->
+<!--   if(length(ind_pvalor != 0)){rutas <- rutas[,-ind_pvalor]} -->
+<!-- } -->
+
+<!-- summary(modelo_27) -->
+
+<!-- ``` -->
+
+<!-- ### Modelo 28 -->
+
+<!-- Modelo 25 pero considerando variable asociada tanto al largo como al TRImestre de medición, $i.e.$ -->
+
+<!-- $T = c + t_{L} \cdot L + t_{TRI} \cdot TRI + \Big( t_{Y} + t_{Y}^{'} \cdot \gamma_{marip} + \Big(t_{Y}^{''} + t_{Y}^{'''} \cdot \gamma_{marip}  \Big) \cdot \gamma_{peak} \Big) \cdot Y_{PN_{1}} + t_{Y}^{'''''} \cdot Y_{PN} + t_{Y}^{''''} \cdot Y_{ZP}  +  \sum_{r}  t_{r} \cdot  \gamma_{r}$ -->
+
+<!-- ```{r Modelo28, echo=FALSE} -->
+
+<!-- Y_PN1 <- dataset$I.PN.P1 -->
+<!-- Y_PN1_marip <- dataset$I.PN.P1 * dataset$turnstile_marip -->
+<!-- Y_PN1_peak <- dataset$I.PN.P1 * dataset$Punta -->
+<!-- Y_PN1_peak_marip <- dataset$I.PN.P1 * dataset$Punta * dataset$turnstile_marip -->
+
+<!-- Y_PN_resto <- dataset$I.PN.P2 + dataset$I.PN.P3 + dataset$I.PN.P4 -->
+<!-- Y_ZP <- dataset$I.ZP.P1 + dataset$I.ZP.P2 + dataset$I.ZP.P3 + dataset$I.ZP.P4 -->
+
+
+<!-- #Variables dummies por servicio-sentido -->
+<!-- dataset$COD_USU_SENTIDO <- as.character(dataset$COD_USU_SENTIDO) -->
+<!-- rutas <- as.data.frame(model.matrix(~dataset$COD_USU_SENTIDO-1)) -->
+<!-- names(rutas) <- substr(names(rutas),nchar(names(rutas)) - 3,nchar(names(rutas))) -->
+
+<!-- #Deleting route 101I (base) -->
+<!-- rutas <- rutas[,-1] -->
+
+<!-- ind_pvalor <- length(dataset) -->
+
+
+<!-- while(length(ind_pvalor) != 0){ -->
+
+<!--   data.all <- data.frame(dataset$TEXP, -->
+<!--                          dataset$largo_ruta, -->
+<!--                          dataset$U_TRI, -->
+<!--                          Y_PN1, -->
+<!--                          Y_PN1_marip, -->
+<!--                          Y_PN1_peak, -->
+<!--                          Y_PN1_peak_marip, -->
+<!--                          Y_PN_resto, -->
+<!--                          Y_ZP) -->
+
+<!--   names(data.all) <- c("texp", -->
+<!--                        "largo", -->
+<!--                        "TRI", -->
+<!--                        "Y_PN_P1", -->
+<!--                        "Y_PN_P1_marip", -->
+<!--                        "Y_PN_P1_peak", -->
+<!--                        "Y_PN_P1_peak_marip", -->
+<!--                        "Y_PN", -->
+<!--                        "Y_ZP") -->
+
+<!--   data.all <- cbind(data.all, rutas) -->
+
+<!--   modelo_28 <- lm(as.formula("texp~."), data = data.all) -->
+<!--   test_summary <- data.frame(summary(modelo_28)[[4]]) -->
+<!--   test_summary <- test_summary[10:nrow(test_summary),] -->
+
+<!--   ind_pvalor <- which(test_summary$Pr...t.. > 0.05) -->
+
+<!--   #Keeping routes statistically significant -->
+<!--   if(length(ind_pvalor != 0)){rutas <- rutas[,-ind_pvalor]} -->
+<!-- } -->
+
+<!-- summary(modelo_28) -->
+
+<!-- ``` -->
+
+
+<!-- ### Modelo 29 -->
+
+<!-- Modelo anterior, pero eliminando variable estadísticamente no significativa (mariposa_peak) -->
+
+<!-- ```{r Modelo29, echo=FALSE} -->
+
+<!-- Y_PN1 <- dataset$I.PN.P1 -->
+<!-- Y_PN1_marip <- dataset$I.PN.P1 * dataset$turnstile_marip -->
+<!-- Y_PN1_peak <- dataset$I.PN.P1 * dataset$Punta -->
+<!-- Y_PN1_peak_marip <- dataset$I.PN.P1 * dataset$Punta * dataset$turnstile_marip -->
+
+<!-- Y_PN_resto <- dataset$I.PN.P2 + dataset$I.PN.P3 + dataset$I.PN.P4 -->
+<!-- Y_ZP <- dataset$I.ZP.P1 + dataset$I.ZP.P2 + dataset$I.ZP.P3 + dataset$I.ZP.P4 -->
+
+
+<!-- #Variables dummies por servicio-sentido -->
+<!-- dataset$COD_USU_SENTIDO <- as.character(dataset$COD_USU_SENTIDO) -->
+<!-- rutas <- as.data.frame(model.matrix(~dataset$COD_USU_SENTIDO-1)) -->
+<!-- names(rutas) <- substr(names(rutas),nchar(names(rutas)) - 3,nchar(names(rutas))) -->
+
+<!-- #Deleting route 101I (base) -->
+<!-- rutas <- rutas[,-1] -->
+
+<!-- ind_pvalor <- length(dataset) -->
+
+
+<!-- while(length(ind_pvalor) != 0){ -->
+
+<!--   data.all <- data.frame(dataset$TEXP, -->
+<!--                          dataset$largo_ruta, -->
+<!--                          dataset$U_TRI, -->
+<!--                          Y_PN1, -->
+<!--                          Y_PN1_marip, -->
+<!--                          Y_PN1_peak, -->
+<!--                          Y_PN_resto, -->
+<!--                          Y_ZP) -->
+
+<!--   names(data.all) <- c("texp", -->
+<!--                        "largo", -->
+<!--                        "TRI", -->
+<!--                        "Y_PN_P1", -->
+<!--                        "Y_PN_P1_marip", -->
+<!--                        "Y_PN_P1_peak", -->
+<!--                        "Y_PN", -->
+<!--                        "Y_ZP") -->
+
+
+<!--   data.all <- cbind(data.all, rutas) -->
+
+<!--   modelo_29 <- lm(as.formula("texp~."), data = data.all) -->
+<!--   test_summary <- data.frame(summary(modelo_29)[[4]]) -->
+<!--   test_summary <- test_summary[9:nrow(test_summary),] -->
+
+<!--   ind_pvalor <- which(test_summary$Pr...t.. > 0.05) -->
+
+<!--   #Keeping routes statistically significant -->
+<!--   if(length(ind_pvalor != 0)){rutas <- rutas[,-ind_pvalor]} -->
+<!-- } -->
+
+<!-- summary(modelo_29) -->
+
+<!-- ``` -->
+
+<!-- ### Modelo 30 -->
+
+<!-- ```{r Modelo30, echo=FALSE} -->
+
+
+<!-- #Variables dummies por servicio-sentido -->
+<!-- dataset$COD_USU_SENTIDO <- as.character(dataset$COD_USU_SENTIDO) -->
+<!-- rutas <- as.data.frame(model.matrix(~dataset$COD_USU_SENTIDO-1)) -->
+<!-- names(rutas) <- substr(names(rutas),nchar(names(rutas)) - 3,nchar(names(rutas))) -->
+
+<!-- #Deleting route 101I (base) -->
+<!-- rutas <- rutas[,-1] -->
+
+<!-- ind_pvalor <- length(dataset) -->
+
+
+<!-- while(length(ind_pvalor) != 0){ -->
+
+<!--   data.all <- data.frame(dataset$TEXP, -->
+<!--                          dataset$largo_ruta, -->
+<!--                          dataset$I.PN, -->
+<!--                          dataset$I.ZP) -->
+
+<!--   names(data.all) <- c("texp", -->
+<!--                        "largo", -->
+<!--                        "Y_PN", -->
+<!--                        "Y_ZP") -->
+
+
+<!--   data.all <- cbind(data.all, rutas) -->
+
+<!--   modelo_30 <- lm(as.formula("texp~."), data = data.all) -->
+<!--   test_summary <- data.frame(summary(modelo_30)[[4]]) -->
+<!--   test_summary <- test_summary[5:nrow(test_summary),] -->
+
+<!--   ind_pvalor <- which(test_summary$Pr...t.. > 0.05) -->
+
+<!--   #Keeping routes statistically significant -->
+<!--   if(length(ind_pvalor != 0)){rutas <- rutas[,-ind_pvalor]} -->
+<!-- } -->
+
+<!-- summary(modelo_30) -->
+
+<!-- ``` -->
+
+
+
+
+
+
+
 
 
 

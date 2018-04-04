@@ -222,7 +222,7 @@ evasion$PUERTA.NUMERO[234874:234882] <- 3
 
 
 #Umbral X (pax/detención) que define la demanda para la cual se visibiliza el efecto del torniquete
-X <- 5
+X <- 4
 
 #Collapsing evasion dataset by expedition
 dataframe <- data.table(evasion)
@@ -318,6 +318,9 @@ dataframe$turnstile[ind_na] <- ifelse(dataframe$FECHA[ind_na] > pmin(dataframe$F
 #Turnstile during the expedition? 2017 style
 dataframe$turnstile_marip[ind_na] <- ifelse(dataframe$FECHA[ind_na] > dataframe$Fecha_mariposa[ind_na],1,0)
 dataframe$turnstile_marip[is.na(dataframe$turnstile_marip)] <- 0
+
+#Deleting Unidad de Negocio
+dataframe$UN <- NULL
 ```
 
 En el siguiente paso se obtiene el tiempo de viaje de cada una de las expediciones junto con el código de TS, su sentido y el largo del recorrido, para esto se hace un merge por día, servicio, patente y hora de inicio de fiscalización (+- 10 min) con LBS.
@@ -341,7 +344,7 @@ dataframe$UpperBound <- dataframe$HORA.INICIO + "00:10:00"
 dataframe$LowerBound <- dataframe$HORA.INICIO - "00:10:00"
 
 #Merge between fiscalizacion and LBS
-fiscalizacion <- sqldf('SELECT dataframe.*, lbs.TEXP, lbs.Periodo, lbs.largo_ruta, lbs.Sentido, lbs.Servicio
+fiscalizacion <- sqldf('SELECT dataframe.*, lbs.TEXP, lbs.UN, lbs.Periodo, lbs.largo_ruta, lbs.Sentido, lbs.Servicio
                        FROM dataframe 
                        LEFT JOIN lbs 
                        ON lbs.Patente = dataframe.Patente
