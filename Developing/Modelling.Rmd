@@ -707,8 +707,220 @@ names(data.all) <- c("texp",
 #Fitting the model
 modelo_14 <- lm(as.formula("texp~."), data = data.all)
 summary(modelo_14)
+plot(modelo_14)
+
+predicted <- predict(modelo_14, data.all[,-1])
+#pdf(file = "actual_predicted.pdf",7,5)
+plot(x= data.all$texp, y=predicted,
+     main = "Predicted vs. Actual values",
+     xlab = "Actual",
+     ylab = "Predicted")
+abline(0,1, col="red")
+#dev.off()
 
 ```
+
+
+```{r}
+
+#OFF PEAK S/TORNIQUETE
+demanda <- 200
+peak <- rep(1,demanda)
+mariposa <-  rep(0,demanda)
+
+largo <- rep(21.89,demanda)
+TRI <- rep(8,demanda)
+DET <- rep(43,demanda)
+Y_PN_P1 <- seq(1,demanda,by=1)
+
+Y_PN <- rep(mean(dataset$I.PN.P2[which(dataset$SERVICIO=="F06" & dataset$Sentido=="Regreso")] +
+  dataset$I.PN.P3[which(dataset$SERVICIO=="F06" & dataset$Sentido=="Regreso")] +
+  dataset$I.PN.P4[which(dataset$SERVICIO=="F06" & dataset$Sentido=="Regreso")]),demanda)
+
+
+Y_ZP <- rep(mean(dataset$I.ZP.P1[which(dataset$SERVICIO=="F06" & dataset$Sentido=="Regreso")] + 
+  dataset$I.ZP.P2[which(dataset$SERVICIO=="F06" & dataset$Sentido=="Regreso")] + 
+  dataset$I.ZP.P3[which(dataset$SERVICIO=="F06" & dataset$Sentido=="Regreso")] +
+  dataset$I.ZP.P4[which(dataset$SERVICIO=="F06" & dataset$Sentido=="Regreso")]),demanda)
+
+
+
+Y_PN_P1_peak <- Y_PN_P1 * peak
+Y_PN_P1_marip <- Y_PN_P1 * mariposa
+Y_PN_P1_peak_marip <- Y_PN_P1 * peak * mariposa
+
+NI <- rep(31,demanda)
+NI_peak <- NI * peak
+
+
+
+F06 <- data.frame(largo,
+                  TRI,
+                  DET,
+                  Y_PN_P1,
+                  Y_PN_P1_marip,
+                  Y_PN_P1_peak,
+                  Y_PN_P1_peak_marip,
+                  Y_PN,
+                  Y_ZP,
+                  NI,
+                  NI_peak)
+
+predicted <- predict(modelo_14, F06)
+F06$pred <- predicted
+
+
+Tiempos <- data.frame(F06$Y_PN_P1,F06$pred)
+names(Tiempos) <- c("Demanda","S/T")
+
+
+
+#OFF PEAK C/TORNIQUETE
+demanda <- 200
+peak <- rep(1,demanda)
+mariposa <-  rep(1,demanda)
+
+largo <- rep(21.89,demanda)
+TRI <- rep(8,demanda)
+DET <- rep(43,demanda)
+Y_PN_P1 <- seq(1,demanda,by=1)
+
+Y_PN <- rep(mean(dataset$I.PN.P2[which(dataset$SERVICIO=="F06" & dataset$Sentido=="Regreso")] +
+  dataset$I.PN.P3[which(dataset$SERVICIO=="F06" & dataset$Sentido=="Regreso")] +
+  dataset$I.PN.P4[which(dataset$SERVICIO=="F06" & dataset$Sentido=="Regreso")]),demanda)
+
+
+Y_ZP <- rep(mean(dataset$I.ZP.P1[which(dataset$SERVICIO=="F06" & dataset$Sentido=="Regreso")] + 
+  dataset$I.ZP.P2[which(dataset$SERVICIO=="F06" & dataset$Sentido=="Regreso")] + 
+  dataset$I.ZP.P3[which(dataset$SERVICIO=="F06" & dataset$Sentido=="Regreso")] +
+  dataset$I.ZP.P4[which(dataset$SERVICIO=="F06" & dataset$Sentido=="Regreso")]),demanda)
+
+
+
+Y_PN_P1_peak <- Y_PN_P1 * peak
+Y_PN_P1_marip <- Y_PN_P1 * mariposa
+Y_PN_P1_peak_marip <- Y_PN_P1 * peak * mariposa
+
+NI <- rep(31,demanda)
+NI_peak <- NI * peak
+
+
+
+F06 <- data.frame(largo,
+                  TRI,
+                  DET,
+                  Y_PN_P1,
+                  Y_PN_P1_marip,
+                  Y_PN_P1_peak,
+                  Y_PN_P1_peak_marip,
+                  Y_PN,
+                  Y_ZP,
+                  NI,
+                  NI_peak)
+
+predicted <- predict(modelo_14, F06)
+
+Tiempos <- cbind(Tiempos, predicted)
+names(Tiempos)[3] <- "C/T" 
+
+
+pdf(file = "texp_F06R_peak.pdf",7,5)
+ggplot(Tiempos) +
+  geom_line(aes(x=Tiempos$Demanda, y=Tiempos$`S/T`), col="blue") + 
+  geom_line(aes(x=Tiempos$Demanda, y=Tiempos$`C/T`), col="red") +
+  labs(x="Demanda PN Puerta 1 (pax)",
+       y="Tiempo de expedición (s)") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  ggtitle("Tiempo de Expedición F06R, Peak") +
+  scale_y_continuous(limits = c(3750, 6000))
+dev.off()
+getwd()
+
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+A continuación se estiman los tiempos de viaje del dataset utilizado, pero considerando el opuesto al uso o no uso de torniquete mariposa y manteniendo el resto de las variables constantes.
+
+```{r Output analysis, echo=FALSE}
+
+torniquete <- rep(0,nrow(dataset))
+torniquete[which(dataset$turnstile_marip == 1)] <- "SI"
+torniquete[which(dataset$n_turnstile==1)] <- "NO"
+
+#Creando variables de demanda
+Y_PN1 <- dataset$I.PN.P1
+Y_PN1_marip <- dataset$I.PN.P1 * dataset$n_turnstile
+Y_PN1_peak <- dataset$I.PN.P1 * dataset$Punta
+Y_PN1_peak_marip <- dataset$I.PN.P1 * dataset$Punta * dataset$n_turnstile
+
+Y_PN_resto <- dataset$I.PN.P2 + dataset$I.PN.P3 + dataset$I.PN.P4
+Y_ZP <- dataset$I.ZP.P1 + dataset$I.ZP.P2 + dataset$I.ZP.P3 + dataset$I.ZP.P4
+
+#Creating dataframe
+data.all <- data.frame(dataset$TEXP,
+                       dataset$largo_ruta, 
+                       dataset$U_TRI, 
+                       dataset$DET,
+                       Y_PN1,
+                       Y_PN1_marip,
+                       Y_PN1_peak,
+                       Y_PN1_peak_marip,
+                       Y_PN_resto,
+                       Y_ZP,
+                       dataset$NI, 
+                       dataset$NI_peak)
+
+names(data.all) <- c("texp",
+                     "largo",
+                     "TRI", 
+                     "DET",
+                     
+                     "Y_PN_P1",
+                     "Y_PN_P1_marip", 
+                     "Y_PN_P1_peak",
+                     "Y_PN_P1_peak_marip",
+                     
+                     "Y_PN",
+                     "Y_ZP",
+                     
+                     "NI",
+                     "NI_peak")
+
+Pred_Inv <- predict(modelo_14, data.all[,-1])
+data.all$Y <- dataset$Y
+data.all$EV <- dataset$EV
+data.all$TOR <- torniquete
+data.all$Peak <- dataset$Punta
+data.all$Predicted <- predicted
+data.all$Pred_Inv <- Pred_Inv
+data.all$Delta <- ((data.all$Pred_Inv - data.all$Predicted)/data.all$Predicted)*100
+data.all$Delta_Act <- ((data.all$Pred_Inv - data.all$texp)/data.all$texp)*100
+data.all <- data.all[-which(data.all$TOR=="SI"),]
+
+
+```
+
 
 #### Modelo 15
 
