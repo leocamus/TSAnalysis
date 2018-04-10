@@ -1,0 +1,104 @@
+---
+title: "TimeSeries_Estimation"
+output: html_notebook
+---
+
+```{python}
+import os
+import sys
+module_path = os.path.abspath(os.path.join('..'))
+if module_path not in sys.path:
+    sys.path.append(module_path)
+    
+import pandas as pd
+import matplotlib
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+from matplotlib.ticker import FuncFormatter
+import numpy as np
+import datetime as dt
+import time
+import feather
+
+from Utils import TransantiagoConstants
+DTPMDir = TransantiagoConstants.DTPMDir
+DTPM_TRXDir = TransantiagoConstants.DTPM_TRXDir
+
+daily_input_path = os.path.join(DTPM_TRXDir,'3_DAILY/daily_summary.csv')
+daily_trx = pd.read_csv(daily_input_path,sep=';',encoding='latin-1', index_col=0)
+
+daily_trx.loc[:,'TOTAL_trx'] = daily_trx.loc[:,'pn_SUM_TRX_no_t'] + daily_trx.loc[:,'pn_SUM_TRX_3t'] + daily_trx.loc[:,'pn_SUM_TRX_tm'] + daily_trx.loc[:,'zp_SUM_TRX']
+
+independent_variables_path = os.path.join(DTPM_TRXDir,'0_INDEPENDENTS/independents_variables.csv')
+independent_variables = pd.read_csv(independent_variables_path,sep=';',encoding='latin-1', index_col=0, parse_dates=[1])
+
+independent_variables.loc[:,'Verano'] =  independent_variables.loc[:,'Enero'] + independent_variables.loc[:,'Febrero']
+independent_variables.loc[:,'Nov_Dic_2017'] = independent_variables.loc[:,'Nov_2017'] + independent_variables.loc[:,'Dic_2017']
+independent_variables.loc[:,'WEEK_OF_YEAR'] = independent_variables.loc[:,'DATE'].apply(lambda x: x.week)
+independent_variables = pd.get_dummies(independent_variables, columns=['WEEK_OF_YEAR'])
+
+complete_db = daily_trx.merge(independent_variables, on =['YEAR','MONTH','YEAR_DAY'], how='left')
+
+complete_db.sort_values(by=['YEAR','MONTH','YEAR_DAY'], ascending=[True,True,True], inplace=True)
+
+feather.write_dataframe(complete_db, "exchange/complete_db.feather")
+```
+```{r}
+##Function to load libraries and install packages, if necessary
+getLibraries <- function(libs) {
+  
+  for (lib in libs) {
+    if(!lib %in% rownames(installed.packages())){install.packages(lib, repos = "http://cran.us.r-project.org")}
+    library(as.character(lib), character.only = TRUE)
+  }
+}
+```
+```{r}
+libs <- c('feather')
+getLibraries(libs)
+# Read from feather
+complete_db <- read_feather("exchange/complete_db.feather")
+```
+
+```{r Estimation of time series}
+regression_1 <- tslm(complete_db$TOTAL_trx ~ 
+                       complete_db$SATURDAY +
+                       complete_db$SUNDAY +
+                       complete_db$Metro.Hora.Punta +
+                       complete_db$kms_ofertados +
+                       complete_db$WEEK_OF_YEAR_52 +
+                       complete_db$WEEK_OF_YEAR_53 +
+                       complete_db$WEEK_OF_YEAR_1 +
+                       complete_db$WEEK_OF_YEAR_2 +
+                       complete_db$WEEK_OF_YEAR_3 +
+                       complete_db$WEEK_OF_YEAR_4 +
+                       complete_db$WEEK_OF_YEAR_5 +
+                       complete_db$WEEK_OF_YEAR_6 +
+                       complete_db$WEEK_OF_YEAR_7 +
+                       complete_db$WEEK_OF_YEAR_8 +
+                       complete_db$WEEK_OF_YEAR_9 +
+                       complete_db$Julio +
+                       complete_db$Nov_2017 +
+                       complete_db$Dic_2017 +
+                       complete_db$t +
+                       complete_db$Feriado_laboral +
+                       complete_db$Feriado_no_laboral +
+                       complete_db$Elecciones +
+                       complete_db$Censo +
+                       complete_db$Partido +
+                       complete_db$FDS_Largo +
+                       complete_db$Disturbios +
+                       complete_db$Corte_Metro +
+                       complete_db$Retraso_Metro +
+                       complete_db$Incidente_Metro +
+                       complete_db$Bucle +
+                       complete_db$Clima +
+                       complete_db$visperas_laborales +
+                       complete_db$kms_metro +
+                       complete_db$N_ZPs +
+                       complete_db$ratio_tm,data=complete_db)
+summary(regression_1)
+```
+
+
+
