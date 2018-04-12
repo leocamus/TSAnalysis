@@ -155,13 +155,14 @@ common_dates = [
 currentTRXPPUDates = {} #TODO: Sometime it should be filled
 
 fourLevelsUp = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
-SSHDir = fourLevelsUp + r'\03_datos\01_SSH'
-TRXPPUDir = fourLevelsUp + r'\03_datos\02_TRXPPU'
-busesTorniqueteDir = fourLevelsUp + r'\03_datos\03_BUSESTORNIQUETE'
-DTPMDir = fourLevelsUp + r'\03_datos\04_DTPM'
-SummaryDir = fourLevelsUp + r'\03_datos\05_SUMMARY'
-RFADir = fourLevelsUp + r'\03_datos\06_RFA'
-DTPM_TRXDir = fourLevelsUp + r'\03_datos\08_DTPM_TRX'
+
+SSHDir = os.path.join(fourLevelsUp,'03_datos/01_SSH')
+TRXPPUDir = os.path.join(fourLevelsUp,'03_datos/02_TRXPPU')
+busesTorniqueteDir = os.path.join(fourLevelsUp,'03_datos/03_BUSESTORNIQUETE')
+DTPMDir = os.path.join(fourLevelsUp,'03_datos/04_DTPM')
+SummaryDir = os.path.join(fourLevelsUp,'03_datos/05_SUMMARY')
+RFADir = os.path.join(fourLevelsUp,'03_datos/06_RFA')
+DTPM_TRXDir = os.path.join(fourLevelsUp,'03_datos/08_DTPM_TRX')
 
 def updateCurrentSSHDates():
 	currentSSHDates = [] #Cleaning and filling again
