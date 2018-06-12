@@ -1,0 +1,33 @@
+---
+title: "SystemTimeSeries_Estimation"
+output: html_notebook
+---
+
+This is a notebook based on the original notebook written in Python called 081_SystemTimeSeriesEstimation.ipynb. It was decided to use R because of its comprehensive documentation related to econometric-utilies packages.
+
+0. Importing all functionality from other .R files
+1. Import datasets
+2. Unit root testing.
+3. Estimation and saving results
+4. Summarizing and printing results to files
+
+0. Importing functionality...
+```{r}
+source(file.path(dirname(getwd()),"Utils","TransantiagoConstants.R"))
+```
+
+1. Importing datasets...
+```{r}
+daily_trx_path <- file.path(DTPM_TRXDir, "3_DAILY", "daily_summary.csv")
+daily_trx <- read.table(daily_trx_path, header=TRUE, sep=";", row.names = 1)
+```
+
+2. Unit root testing...
+```{r}
+getLibrary("urca")
+df<-ur.df(daily_trx$pn_SUM_EXP_no_t,type="trend",lags=0)
+df
+```
+
+
+
