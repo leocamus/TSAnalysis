@@ -12,7 +12,7 @@ getLibrary <- function(lib) {
 
 ## 1. Paths.
 getLibrary("here")
-repo_path <- here()
+repo_path <- here::here()
 data_dir <- file.path(dirname(dirname(repo_path)),"03_datos")
 
 SSHDir = file.path(data_dir,"01_SSH")

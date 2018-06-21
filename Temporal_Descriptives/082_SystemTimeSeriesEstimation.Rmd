@@ -3,7 +3,7 @@ title: "SystemTimeSeries_Estimation"
 output: html_notebook
 ---
 
-This is a notebook based on the original notebook written in Python called 081_SystemTimeSeriesEstimation.ipynb. It was decided to use R because of its comprehensive documentation related to econometric-utilies packages.
+This is a notebook based on the original notebook written in Python called 081_SystemTimeSeriesEstimation.ipynb. It was decided to use R because of its comprehensive documentation related to econometric-utilities packages.
 
 0. Importing all functionality from other .R files
 1. Import datasets
@@ -11,22 +11,139 @@ This is a notebook based on the original notebook written in Python called 081_S
 3. Estimation and saving results
 4. Summarizing and printing results to files
 
-0. Importing functionality...
+Importing functionality. 
+Be aware that "getwd()" returns the directory where this notebook is located.
 ```{r}
 source(file.path(dirname(getwd()),"Utils","TransantiagoConstants.R"))
 ```
 
-1. Importing datasets...
+Importing datasets. 
+Sorting of daily_trx is not needed since it is already sorted as desired.
 ```{r}
+getLibrary("lubridate")
+getLibrary("dummies")
+
 daily_trx_path <- file.path(DTPM_TRXDir, "3_DAILY", "daily_summary.csv")
-daily_trx <- read.table(daily_trx_path, header=TRUE, sep=";", row.names = 1)
+daily_trx <- read.csv(daily_trx_path, header=TRUE, sep=";", row.names = 1, stringsAsFactors = FALSE)
+daily_trx$TOTAL_trx <- daily_trx$pn_SUM_TRX_no_t + daily_trx$pn_SUM_TRX_3t + daily_trx$pn_SUM_TRX_tm + daily_trx$zp_SUM_TRX
+
+independent_variables_path <- file.path(DTPM_TRXDir, "0_INDEPENDENTS", "independents_variables.csv")
+independent_variables <- read.csv(independent_variables_path, header=TRUE, sep=";", row.names = 1, stringsAsFactors = FALSE)
+independent_variables$DATE <- as.Date(independent_variables$DATE,"%Y-%m-%d")
+independent_variables$Verano <- independent_variables$Enero + independent_variables$Febrero
+independent_variables$Nov_Dic_2017 <- independent_variables$Nov_2017 + independent_variables$Dic_2017
+
+independent_variables$WEEK_OF_YEAR <- factor(lubridate::isoweek(independent_variables$DATE))
+independent_variables <- dummy.data.frame(independent_variables, names = c("WEEK_OF_YEAR"), sep="_")
+complete_db <- merge(daily_trx, independent_variables, by=c("YEAR","MONTH","YEAR_DAY"))
 ```
 
-2. Unit root testing...
+Unit root testing.
+Since we cannot rely on CLM assumptions in this case (particularly on the regressors' Strict Exogeneity), Assymptotic properties of OLS are assumed.
+
+Variables to test:
+pn_SUM_EXP_no_t, pn_SUM_EXP_3_t, pn_SUM_EXP_tm, N_ZPs, kms_ofertados, TOTAL_trx.
+
+Particularities:
+1. This series contains high levels of seasonality <- this is a problem!! Start by plotting variables.
+2. How to choose lags? <- remember dynamical completeness
+3. How to choose between nothing, drift and drift + trend? <- plot variables.
+4. Other unit-root existence test? <- complement.
+
+
+```{r}
+library("reshape2")
+auxiliary_db <- complete_db[,c("DATE","pn_SUM_EXP_no_t", "pn_SUM_EXP_3t", "pn_SUM_EXP_tm")]
+auxiliary_db <- reshape2::melt(auxiliary_db, id="DATE")
+```
+
+
+Plotting some variables in time : stacked plot of number of trips by installation conditon.
+```{r}
+library("ggplot2")
+theme_set(theme_minimal())
+
+trips_stacked_plot <- ggplot(auxiliary_db, aes(x=auxiliary_db$DATE, y=auxiliary_db$value)) + 
+  geom_area(aes(color = auxiliary_db$variable, fill = auxiliary_db$variable), alpha = 0.5, position = 'stack') + 
+  scale_color_manual(values = c("#00AFBB", "#E7B800", "#FC4E07"),name="Installation\nCondition",labels=c("NO T.","3A. T.","B. T.")) +
+  scale_fill_manual(values = c("#00AFBB", "#E7B800", "#FC4E07"),name="Installation\nCondition",labels=c("NO T.","3A. T.","B. T.")) + 
+  xlab("date (days)") + 
+  ylab("number of trips") + 
+  scale_x_date(date_breaks="2 months") + 
+  scale_y_continuous(breaks = seq(min(auxiliary_db$value), max(auxiliary_db$value), by = 10000), label=scales::comma) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) #+ 
+#  coord_fixed(ratio = 1/150)
+
+trips_stacked_plot
+plot_path <- file.path(dirname(dirname(data_dir)),"05_drafts","01_TRB","0_FIGURES")
+ggsave(file.path(plot_path,"trips_stacked_plot.pdf"),plot = last_plot(), width = 7, height = 4)
+```
+
+Plotting some variables in time : line plot of total number of transaction per day.
+```{r}
+trx_plot <- ggplot(complete_db, aes(x=complete_db$DATE, y=complete_db$TOTAL_trx)) + 
+  geom_line(color="#00AFBB") + 
+  xlab("date (days)") + 
+  ylab("smartcard transactions") + 
+  scale_x_date(date_breaks="2 months") + 
+  scale_y_continuous(breaks = seq(480000, max(complete_db$TOTAL_trx), by = 500000), label=scales::comma) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) #+ 
+#  coord_fixed(ratio = 1/5000)
+
+trx_plot
+ggsave(file.path(plot_path,"trx_plot.pdf"),plot = last_plot(), width = 7, height = 4)
+```
+
+Plotting some variables in time : line plot of total number of zps.
+
+
+Plotting some variables in time : line plot of total number of supplied kms.
+```{r}
+kms_plot <- ggplot(complete_db, aes(x=complete_db$DATE, y=complete_db$kms_ofertados)) + 
+  geom_line(color="#00AFBB") + 
+  xlab("date (days)") + 
+  ylab("supplied-kms") + 
+  scale_x_date(date_breaks="2 months") + 
+#  scale_y_continuous(breaks = seq(min(complete_db$kms_ofertados), max(complete_db$kms_ofertados), by = 1000), label=scales::comma) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) #+ 
+#  coord_fixed(ratio = 1/5000)
+
+kms_plot
+#ggsave(file.path(plot_path,"kms_plot.pdf"),plot = last_plot(), width = 7, height = 4)
+```
+
+```{r}
+complete_db[which(complete_db$kms_ofertados>=1500000),c("DATE","kms_ofertados")]
+```
+
+Checking for inconcistency in kms-ofertados
+```{r}
+marzo_2015 <- read.table("/home/leonardo/Desktop/Evasion/01_analisis/03_datos/04_DTPM/06_LBS/0_kms_recorridos/2015/marzo_kms_recorridos.txt", header=TRUE, sep=";", stringsAsFactors = FALSE, dec=",")
+
+marzo_2015$Fecha <- as.Date(marzo_2015$Fecha,"%d/%m/%Y")
+marzo_2015$UN <- factor(marzo_2015$UN)
+#marzo_2015$Expr1002 <- as.numeric(marzo_2015$Expr1002)
+
+ggplot(marzo_2015, aes(x=marzo_2015$Fecha, y=marzo_2015$Expr1002)) + 
+  geom_line(aes(col=marzo_2015$UN)) + 
+  xlab("date (days)") + 
+  ylab("supplied-kms") + 
+  scale_x_date(date_breaks="1 day") + 
+ # scale_y_continuous(breaks = seq(min(complete_db$kms_ofertados), max(complete_db$kms_ofertados), by = 1000), label=scales::comma) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) #+ 
+#  coord_fixed(ratio = 1/5000)
+
+```
+
+
+
 ```{r}
 getLibrary("urca")
-df<-ur.df(daily_trx$pn_SUM_EXP_no_t,type="trend",lags=0)
-df
+df_exp_no_t<-ur.df(daily_trx$pn_SUM_EXP_no_t,type="trend",lags=0)
+df_exp_no_t<-ur.df(daily_trx$pn_SUM_EXP_no_t,type="trend",lags=0)
+df_exp_no_t<-ur.df(daily_trx$pn_SUM_EXP_no_t,type="trend",lags=0)
+df_exp_no_t<-ur.df(daily_trx$pn_SUM_EXP_no_t,type="trend",lags=0)
+df_exp_no_t<-ur.df(daily_trx$pn_SUM_EXP_no_t,type="trend",lags=0)
 ```
 
 
