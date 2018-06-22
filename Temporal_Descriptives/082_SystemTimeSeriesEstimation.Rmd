@@ -42,7 +42,7 @@ Unit root testing.
 Since we cannot rely on CLM assumptions in this case (particularly on the regressors' Strict Exogeneity), Assymptotic properties of OLS are assumed.
 
 Variables to test:
-pn_SUM_EXP_no_t, pn_SUM_EXP_3_t, pn_SUM_EXP_tm, N_ZPs, kms_ofertados, TOTAL_trx.
+pn_SUM_EXP_no_t, pn_SUM_EXP_3_t, pn_SUM_EXP_tm, TOTAL_trx, kms_ofertados, N_ZPs. 
 
 Particularities:
 1. This series contains high levels of seasonality <- this is a problem!! Start by plotting variables.
@@ -52,7 +52,7 @@ Particularities:
 
 
 ```{r}
-library("reshape2")
+getLibrary("reshape2")
 auxiliary_db <- complete_db[,c("DATE","pn_SUM_EXP_no_t", "pn_SUM_EXP_3t", "pn_SUM_EXP_tm")]
 auxiliary_db <- reshape2::melt(auxiliary_db, id="DATE")
 ```
@@ -60,7 +60,7 @@ auxiliary_db <- reshape2::melt(auxiliary_db, id="DATE")
 
 Plotting some variables in time : stacked plot of number of trips by installation conditon.
 ```{r}
-library("ggplot2")
+getLibrary("ggplot2")
 theme_set(theme_minimal())
 
 trips_stacked_plot <- ggplot(auxiliary_db, aes(x=auxiliary_db$DATE, y=auxiliary_db$value)) + 
@@ -94,46 +94,36 @@ trx_plot
 ggsave(file.path(plot_path,"trx_plot.pdf"),plot = last_plot(), width = 7, height = 4)
 ```
 
-Plotting some variables in time : line plot of total number of zps.
-
-
-Plotting some variables in time : line plot of total number of supplied kms.
+Plotting some variables in time : line plot of total number of supplied kms from 190 server
 ```{r}
 kms_plot <- ggplot(complete_db, aes(x=complete_db$DATE, y=complete_db$kms_ofertados)) + 
   geom_line(color="#00AFBB") + 
   xlab("date (days)") + 
   ylab("supplied-kms") + 
   scale_x_date(date_breaks="2 months") + 
-#  scale_y_continuous(breaks = seq(min(complete_db$kms_ofertados), max(complete_db$kms_ofertados), by = 1000), label=scales::comma) +
+  scale_y_continuous(label=scales::comma) +
   theme(axis.text.x = element_text(angle = 90, hjust = 1)) #+ 
 #  coord_fixed(ratio = 1/5000)
 
 kms_plot
-#ggsave(file.path(plot_path,"kms_plot.pdf"),plot = last_plot(), width = 7, height = 4)
+ggsave(file.path(plot_path,"kms_plot.pdf"),plot = last_plot(), width = 7, height = 4)
 ```
 
+Plotting some variables in time : line plot of total number of zps.
 ```{r}
-complete_db[which(complete_db$kms_ofertados>=1500000),c("DATE","kms_ofertados")]
-```
-
-Checking for inconcistency in kms-ofertados
-```{r}
-marzo_2015 <- read.table("/home/leonardo/Desktop/Evasion/01_analisis/03_datos/04_DTPM/06_LBS/0_kms_recorridos/2015/marzo_kms_recorridos.txt", header=TRUE, sep=";", stringsAsFactors = FALSE, dec=",")
-
-marzo_2015$Fecha <- as.Date(marzo_2015$Fecha,"%d/%m/%Y")
-marzo_2015$UN <- factor(marzo_2015$UN)
-#marzo_2015$Expr1002 <- as.numeric(marzo_2015$Expr1002)
-
-ggplot(marzo_2015, aes(x=marzo_2015$Fecha, y=marzo_2015$Expr1002)) + 
-  geom_line(aes(col=marzo_2015$UN)) + 
+ZPs_plot <- ggplot(complete_db, aes(x=complete_db$DATE, y=complete_db$N_ZPs)) + 
+  geom_line(color="#00AFBB") + 
   xlab("date (days)") + 
-  ylab("supplied-kms") + 
-  scale_x_date(date_breaks="1 day") + 
- # scale_y_continuous(breaks = seq(min(complete_db$kms_ofertados), max(complete_db$kms_ofertados), by = 1000), label=scales::comma) +
+  ylab("EV stations") + 
+  scale_x_date(date_breaks="2 months") + 
+  scale_y_continuous(label=scales::comma) +
   theme(axis.text.x = element_text(angle = 90, hjust = 1)) #+ 
 #  coord_fixed(ratio = 1/5000)
 
+ZPs_plot
+ggsave(file.path(plot_path,"ZPs_plot.pdf"),plot = last_plot(), width = 7, height = 4)
 ```
+
 
 
 
