@@ -7,8 +7,9 @@ This is a notebook based on the original notebook written in Python called 081_S
 
 0. Importing all functionality from other .R files
 1. Import datasets
-2. Unit root testing.
-3. Estimation and saving results
+1.5. Estimation and saving results of the Basic Model
+2. Unit root testing <- TO-DO!
+2.5. Estimation and saving results of the Extended Model
 4. Summarizing and printing results to files
 
 Importing functionality. 
@@ -26,37 +27,28 @@ getLibrary("dummies")
 daily_trx_path <- file.path(DTPM_TRXDir, "3_DAILY", "daily_summary.csv")
 daily_trx <- read.csv(daily_trx_path, header=TRUE, sep=";", row.names = 1, stringsAsFactors = FALSE)
 daily_trx$TOTAL_trx <- daily_trx$pn_SUM_TRX_no_t + daily_trx$pn_SUM_TRX_3t + daily_trx$pn_SUM_TRX_tm + daily_trx$zp_SUM_TRX
+```
 
+
+```{r}
 independent_variables_path <- file.path(DTPM_TRXDir, "0_INDEPENDENTS", "independents_variables.csv")
 independent_variables <- read.csv(independent_variables_path, header=TRUE, sep=";", row.names = 1, stringsAsFactors = FALSE)
 independent_variables$DATE <- as.Date(independent_variables$DATE,"%Y-%m-%d")
 independent_variables$Verano <- independent_variables$Enero + independent_variables$Febrero
 independent_variables$Nov_Dic_2017 <- independent_variables$Nov_2017 + independent_variables$Dic_2017
-
 independent_variables$WEEK_OF_YEAR <- factor(lubridate::isoweek(independent_variables$DATE))
 independent_variables <- dummy.data.frame(independent_variables, names = c("WEEK_OF_YEAR"), sep="_")
-complete_db <- merge(daily_trx, independent_variables, by=c("YEAR","MONTH","YEAR_DAY"))
 ```
 
-Unit root testing.
-Since we cannot rely on CLM assumptions in this case (particularly on the regressors' Strict Exogeneity), Assymptotic properties of OLS are assumed.
-
-Variables to test:
-pn_SUM_EXP_no_t, pn_SUM_EXP_3_t, pn_SUM_EXP_tm, TOTAL_trx, kms_ofertados, N_ZPs. 
-
-Particularities:
-1. This series contains high levels of seasonality <- this is a problem!! Start by plotting variables.
-2. How to choose lags? <- remember dynamical completeness
-3. How to choose between nothing, drift and drift + trend? <- plot variables.
-4. Other unit-root existence test? <- complement.
-
+```{r}
+complete_db <- merge(daily_trx, independent_variables, by=c("YEAR","MONTH","YEAR_DAY"))
+```
 
 ```{r}
 getLibrary("reshape2")
 auxiliary_db <- complete_db[,c("DATE","pn_SUM_EXP_no_t", "pn_SUM_EXP_3t", "pn_SUM_EXP_tm")]
 auxiliary_db <- reshape2::melt(auxiliary_db, id="DATE")
 ```
-
 
 Plotting some variables in time : stacked plot of number of trips by installation conditon.
 ```{r}
@@ -99,7 +91,7 @@ Plotting some variables in time : line plot of total number of supplied kms from
 kms_plot <- ggplot(complete_db, aes(x=complete_db$DATE, y=complete_db$kms_ofertados)) + 
   geom_line(color="#00AFBB") + 
   xlab("date (days)") + 
-  ylab("supplied-kms") + 
+  ylab("supplied_kms") + 
   scale_x_date(date_breaks="2 months") + 
   scale_y_continuous(label=scales::comma) +
   theme(axis.text.x = element_text(angle = 90, hjust = 1)) #+ 
@@ -123,16 +115,122 @@ ZPs_plot <- ggplot(complete_db, aes(x=complete_db$DATE, y=complete_db$N_ZPs)) +
 ZPs_plot
 ggsave(file.path(plot_path,"ZPs_plot.pdf"),plot = last_plot(), width = 7, height = 4)
 ```
+ESTIMATION OF A TEST, COMPARING IT TO PYTHON'S OUTPUT.
+```{r}
+getLibrary("sandwich")
+data.all <- data.frame(complete_db$TOTAL_trx, 
+                       complete_db$SATURDAY,
+                       complete_db$SUNDAY,
+                       complete_db$Metro.Hora.Punta,
+                       complete_db$kms_ofertados, 
+                       complete_db$WEEK_OF_YEAR_52,
+                       complete_db$WEEK_OF_YEAR_53,
+                       complete_db$WEEK_OF_YEAR_1,
+                       complete_db$WEEK_OF_YEAR_2,
+                       complete_db$WEEK_OF_YEAR_3,
+                       complete_db$WEEK_OF_YEAR_4,
+                       complete_db$WEEK_OF_YEAR_5,
+                       complete_db$WEEK_OF_YEAR_6,
+                       complete_db$WEEK_OF_YEAR_7,
+                       complete_db$WEEK_OF_YEAR_8,
+                       complete_db$WEEK_OF_YEAR_9,
+                       complete_db$Julio,
+                       complete_db$Nov_2017,
+                       complete_db$Dic_2017,
+                       complete_db$t,
+                       complete_db$Feriado_laboral,
+                       complete_db$Feriado_no_laboral,
+                       complete_db$Elecciones,
+                       complete_db$Censo,
+                       complete_db$Partido,
+                       complete_db$FDS_Largo,
+                       complete_db$Disturbios,
+                       complete_db$Corte_Metro,
+                       complete_db$Retraso_Metro,
+                       complete_db$Incidente_Metro,
+                       complete_db$Bucle,
+                       complete_db$Clima,
+                       complete_db$visperas_laborales,
+                       complete_db$kms_metro,
+                       complete_db$N_ZPs,
+                       complete_db$ratio_tm
+                       )
+
+names(data.all) <- c("total_trx",
+                     "saturday",
+                     "sunday",
+                     "subway_peak_fare",
+                     "supplied_kms",
+                     "week_52",
+                     "week_53",
+                     "week_1",
+                     "week_2",
+                     "week_3",
+                     "week_4",
+                     "week_5",
+                     "week_6",
+                     "week_7",
+                     "week_8",
+                     "week_9",
+                     "july",
+                     "nov_2017",
+                     "dec_2017",
+                     "t",
+                     "working_holiday",
+                     "weekend_holiday",
+                     "elections",
+                     "census",
+                     "soccer_match",
+                     "long_weekend",
+                     "social_mov",
+                     "subway_cut",
+                     "subway_delay",
+                     "subway_incident",
+                     "loop",
+                     "weather",
+                     "working_eves",
+                     "subway_kms",
+                     "N_EVs",
+                     "ratio_tm"
+                     )
+
+test_01 <- lm(as.formula("total_trx~."), data = data.all)
+
+g_1 <- floor(4*((1096/100)^(2/9)))
+
+NeweyWest(test_01, lag = g_1, prewhite = FALSE)
+
+summary(test_01)
+```
+
+
+Estimation and saving results of the Basic Model. The methodology to estimate the basic model is:
+- Start including all the possible variables.
+- Eliminate one variable at a time based on HAC SE.
+- OBS: This methodology could be replaced by something "more automatic" (i.e stepwise selection)
+
+
+
+
+Unit root testing.
+Since we cannot rely on CLM assumptions in this case (particularly on the regressors' Strict Exogeneity), Assymptotic properties of OLS are assumed.
+
+Variables to test:
+pn_SUM_EXP_no_t, pn_SUM_EXP_3_t, pn_SUM_EXP_tm, TOTAL_trx, kms_ofertados, N_ZPs. 
+
+Particularities:
+1. This series contains high levels of seasonality <- this is a problem!! Start by plotting variables.
+2. How to choose lags? <- remember dynamical completeness
+3. How to choose between nothing, drift and drift + trend? <- plot variables.
+4. Other unit-root existence test? <- complement.
+
+
 
 
 
 
 ```{r}
 getLibrary("urca")
-df_exp_no_t<-ur.df(daily_trx$pn_SUM_EXP_no_t,type="trend",lags=0)
-df_exp_no_t<-ur.df(daily_trx$pn_SUM_EXP_no_t,type="trend",lags=0)
-df_exp_no_t<-ur.df(daily_trx$pn_SUM_EXP_no_t,type="trend",lags=0)
-df_exp_no_t<-ur.df(daily_trx$pn_SUM_EXP_no_t,type="trend",lags=0)
 df_exp_no_t<-ur.df(daily_trx$pn_SUM_EXP_no_t,type="trend",lags=0)
 ```
 
