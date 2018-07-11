@@ -9,17 +9,16 @@ This is a notebook based on the original notebook written in Python called 081_S
 1. Import datasets
 1.5. Estimation and saving results of the Basic Model
 2. Unit root testing <- TO-DO!
-2.5. Estimation and saving results of the Extended Model
+2.5. Estimation and saving results of the Extended Model <- TO-DO!
 4. Summarizing and printing results to files
 
-Importing functionality. 
+#Importing functionality. 
 Be aware that "getwd()" returns the directory where this notebook is located.
 ```{r}
 source(file.path(dirname(getwd()),"Utils","TransantiagoConstants.R"))
 ```
 
-Importing datasets. 
-Sorting of daily_trx is not needed since it is already sorted as desired.
+#Importing datasets. 
 ```{r}
 getLibrary("lubridate")
 getLibrary("dummies")
@@ -28,7 +27,6 @@ daily_trx_path <- file.path(DTPM_TRXDir, "3_DAILY", "daily_summary.csv")
 daily_trx <- read.csv(daily_trx_path, header=TRUE, sep=";", row.names = 1, stringsAsFactors = FALSE)
 daily_trx$TOTAL_trx <- daily_trx$pn_SUM_TRX_no_t + daily_trx$pn_SUM_TRX_3t + daily_trx$pn_SUM_TRX_tm + daily_trx$zp_SUM_TRX
 ```
-
 
 ```{r}
 independent_variables_path <- file.path(DTPM_TRXDir, "0_INDEPENDENTS", "independents_variables.csv")
@@ -42,6 +40,7 @@ independent_variables <- dummy.data.frame(independent_variables, names = c("WEEK
 
 ```{r}
 complete_db <- merge(daily_trx, independent_variables, by=c("YEAR","MONTH","YEAR_DAY"))
+complete_db <- complete_db[order(complete_db$DATE),]
 ```
 
 ```{r}
@@ -50,7 +49,7 @@ auxiliary_db <- complete_db[,c("DATE","pn_SUM_EXP_no_t", "pn_SUM_EXP_3t", "pn_SU
 auxiliary_db <- reshape2::melt(auxiliary_db, id="DATE")
 ```
 
-Plotting some variables in time : stacked plot of number of trips by installation conditon.
+#Plotting some variables in time : stacked plot of number of trips by installation conditon.
 ```{r}
 getLibrary("ggplot2")
 theme_set(theme_minimal())
@@ -66,12 +65,12 @@ trips_stacked_plot <- ggplot(auxiliary_db, aes(x=auxiliary_db$DATE, y=auxiliary_
   theme(axis.text.x = element_text(angle = 90, hjust = 1)) #+ 
 #  coord_fixed(ratio = 1/150)
 
-trips_stacked_plot
+#trips_stacked_plot
 plot_path <- file.path(dirname(dirname(data_dir)),"05_drafts","01_TRB","0_FIGURES")
-ggsave(file.path(plot_path,"trips_stacked_plot.pdf"),plot = last_plot(), width = 7, height = 4)
+#ggsave(file.path(plot_path,"trips_stacked_plot.pdf"),plot = last_plot(), width = 7, height = 4)
 ```
 
-Plotting some variables in time : line plot of total number of transaction per day.
+#Plotting some variables in time : line plot of total number of transaction per day.
 ```{r}
 trx_plot <- ggplot(complete_db, aes(x=complete_db$DATE, y=complete_db$TOTAL_trx)) + 
   geom_line(color="#00AFBB") + 
@@ -82,11 +81,11 @@ trx_plot <- ggplot(complete_db, aes(x=complete_db$DATE, y=complete_db$TOTAL_trx)
   theme(axis.text.x = element_text(angle = 90, hjust = 1)) #+ 
 #  coord_fixed(ratio = 1/5000)
 
-trx_plot
-ggsave(file.path(plot_path,"trx_plot.pdf"),plot = last_plot(), width = 7, height = 4)
+#trx_plot
+#ggsave(file.path(plot_path,"trx_plot.pdf"),plot = last_plot(), width = 7, height = 4)
 ```
 
-Plotting some variables in time : line plot of total number of supplied kms from 190 server
+#Plotting some variables in time : line plot of total number of supplied kms from 190 server
 ```{r}
 kms_plot <- ggplot(complete_db, aes(x=complete_db$DATE, y=complete_db$kms_ofertados)) + 
   geom_line(color="#00AFBB") + 
@@ -97,11 +96,11 @@ kms_plot <- ggplot(complete_db, aes(x=complete_db$DATE, y=complete_db$kms_oferta
   theme(axis.text.x = element_text(angle = 90, hjust = 1)) #+ 
 #  coord_fixed(ratio = 1/5000)
 
-kms_plot
-ggsave(file.path(plot_path,"kms_plot.pdf"),plot = last_plot(), width = 7, height = 4)
+#kms_plot
+#ggsave(file.path(plot_path,"kms_plot.pdf"),plot = last_plot(), width = 7, height = 4)
 ```
 
-Plotting some variables in time : line plot of total number of zps.
+#Plotting some variables in time : line plot of total number of zps.
 ```{r}
 ZPs_plot <- ggplot(complete_db, aes(x=complete_db$DATE, y=complete_db$N_ZPs)) + 
   geom_line(color="#00AFBB") + 
@@ -112,12 +111,14 @@ ZPs_plot <- ggplot(complete_db, aes(x=complete_db$DATE, y=complete_db$N_ZPs)) +
   theme(axis.text.x = element_text(angle = 90, hjust = 1)) #+ 
 #  coord_fixed(ratio = 1/5000)
 
-ZPs_plot
-ggsave(file.path(plot_path,"ZPs_plot.pdf"),plot = last_plot(), width = 7, height = 4)
+#ZPs_plot
+#ggsave(file.path(plot_path,"ZPs_plot.pdf"),plot = last_plot(), width = 7, height = 4)
 ```
-ESTIMATION OF A TEST, COMPARING IT TO PYTHON'S OUTPUT.
+
+#Test M1_1
 ```{r}
 getLibrary("sandwich")
+getLibrary("lmtest")
 data.all <- data.frame(complete_db$TOTAL_trx, 
                        complete_db$SATURDAY,
                        complete_db$SUNDAY,
@@ -191,28 +192,1985 @@ names(data.all) <- c("total_trx",
                      "working_eves",
                      "subway_kms",
                      "N_EVs",
-                     "ratio_tm"
-                     )
+                     "ratio_tm")
 
 test_01 <- lm(as.formula("total_trx~."), data = data.all)
+```
 
-g_1 <- floor(4*((1096/100)^(2/9)))
+M1_1_1 Newey and West (1987) HAC S.E. No prewhitening. No small-sample adjustment. Maximum lags = 6
+```{r}
+g_1 <- floor(4*((1096.0/100.0)^(2/9)))
+coeftest(test_01, vcov = NeweyWest(test_01, lag = g_1, prewhite = FALSE))
+```
 
-NeweyWest(test_01, lag = g_1, prewhite = FALSE)
+M1_1_2 Newey and West (1987) HAC S.E. via kernHAC (Andrews, 1991). No prewhitening. No small-sample adjustment. Maximum lags = 6
+```{r}
+bartlettHAC <- function(x, L) kernHAC(x, kernel = "Bartlett", prewhite = FALSE, adjust = FALSE, bw = L+1)
+coeftest(test_01, vcov = bartlettHAC(test_01, L = g_1))
+```
 
-summary(test_01)
+M1_1_3 Newey and West (1987) HAC S.E. via kernHAC (Andrews, 1991). No prewhitening. Small-sample adjustment. Maximum lags = 6
+```{r}
+bartlettHAC <- function(x, L) kernHAC(x, kernel = "Bartlett", prewhite = FALSE, adjust = TRUE, bw = L+1)
+coeftest(test_01, vcov = bartlettHAC(test_01, L = g_1))
+```
+
+#Test M1_2
+```{r}
+complete_db$log_TOTAL_trx <- log(complete_db$TOTAL_trx)
+
+data.all <- data.frame(complete_db$log_TOTAL_trx, 
+                       complete_db$SATURDAY,
+                       complete_db$SUNDAY,
+                       complete_db$Metro.Hora.Punta,
+                       complete_db$kms_ofertados, 
+                       complete_db$WEEK_OF_YEAR_52,
+                       complete_db$WEEK_OF_YEAR_53,
+                       complete_db$WEEK_OF_YEAR_1,
+                       complete_db$WEEK_OF_YEAR_2,
+                       complete_db$WEEK_OF_YEAR_3,
+                       complete_db$WEEK_OF_YEAR_4,
+                       complete_db$WEEK_OF_YEAR_5,
+                       complete_db$WEEK_OF_YEAR_6,
+                       complete_db$WEEK_OF_YEAR_7,
+                       complete_db$WEEK_OF_YEAR_8,
+                       complete_db$WEEK_OF_YEAR_9,
+                       complete_db$Julio,
+                       complete_db$Nov_2017,
+                       complete_db$Dic_2017,
+                       complete_db$t,
+                       complete_db$Feriado_laboral,
+                       complete_db$Feriado_no_laboral,
+                       complete_db$Elecciones,
+                       complete_db$Censo,
+                       complete_db$Partido,
+                       complete_db$FDS_Largo,
+                       complete_db$Disturbios,
+                       complete_db$Corte_Metro,
+                       complete_db$Retraso_Metro,
+                       complete_db$Incidente_Metro,
+                       complete_db$Bucle,
+                       complete_db$Clima,
+                       complete_db$visperas_laborales,
+                       complete_db$kms_metro,
+                       complete_db$N_ZPs,
+                       complete_db$ratio_tm
+                       )
+
+names(data.all) <- c("log_total_trx",
+                     "saturday",
+                     "sunday",
+                     "subway_peak_fare",
+                     "supplied_kms",
+                     "week_52",
+                     "week_53",
+                     "week_1",
+                     "week_2",
+                     "week_3",
+                     "week_4",
+                     "week_5",
+                     "week_6",
+                     "week_7",
+                     "week_8",
+                     "week_9",
+                     "july",
+                     "nov_2017",
+                     "dec_2017",
+                     "t",
+                     "working_holiday",
+                     "weekend_holiday",
+                     "elections",
+                     "census",
+                     "soccer_match",
+                     "long_weekend",
+                     "social_mov",
+                     "subway_cut",
+                     "subway_delay",
+                     "subway_incident",
+                     "loop",
+                     "weather",
+                     "working_eves",
+                     "subway_kms",
+                     "N_EVs",
+                     "ratio_tm")
+
+test_02 <- lm(as.formula("log_total_trx~."), data = data.all)
+```
+
+M1_2_1 Newey and West (1987) HAC S.E. No prewhitening. No small-sample adjustment. Maximum lags = 6
+```{r}
+coeftest(test_02, vcov = NeweyWest(test_02, lag = g_1, prewhite = FALSE))
+```
+
+#Estimation and saving results of the Basic Model. B1_1
+The methodology to estimate the basic model is:
+- Start including all the possible variables.
+- Eliminate one variable at a time based on HAC SE.
+- OBS: This methodology could be replaced by something "more automatic" (i.e stepwise selection??)
+
+```{r}
+complete_db$log_TOTAL_trx <- log(complete_db$TOTAL_trx)
+omitted_B1 <- character()
+
+data.all <- data.frame(complete_db$log_TOTAL_trx, 
+                       complete_db$SATURDAY,
+                       complete_db$SUNDAY,
+                       complete_db$Metro.Hora.Punta,
+                       complete_db$kms_ofertados, 
+                       complete_db$WEEK_OF_YEAR_52,
+                       complete_db$WEEK_OF_YEAR_53,
+                       complete_db$WEEK_OF_YEAR_1,
+                       complete_db$WEEK_OF_YEAR_2,
+                       complete_db$WEEK_OF_YEAR_3,
+                       complete_db$WEEK_OF_YEAR_4,
+                       complete_db$WEEK_OF_YEAR_5,
+                       complete_db$WEEK_OF_YEAR_6,
+                       complete_db$WEEK_OF_YEAR_7,
+                       complete_db$WEEK_OF_YEAR_8,
+                       complete_db$WEEK_OF_YEAR_9,
+                       complete_db$Julio,
+                       complete_db$Nov_2017,
+                       complete_db$Dic_2017,
+                       complete_db$t,
+                       complete_db$Feriado_laboral,
+                       complete_db$Feriado_no_laboral,
+                       complete_db$Elecciones,
+                       complete_db$Censo,
+                       complete_db$Partido,
+                       complete_db$FDS_Largo,
+                       complete_db$Disturbios,
+                       complete_db$Corte_Metro,
+                       complete_db$Retraso_Metro,
+                       complete_db$Incidente_Metro,
+                       complete_db$Bucle,
+                       complete_db$Clima,
+                       complete_db$visperas_laborales,
+                       complete_db$kms_metro,
+                       complete_db$N_ZPs,
+                       complete_db$pn_SUM_EXP_no_t,
+                       complete_db$pn_SUM_EXP_3t,
+                       complete_db$pn_SUM_EXP_tm
+                       )
+
+names(data.all) <- c("log_total_trx",
+                     "saturday",
+                     "sunday",
+                     "subway_peak_fare",
+                     "supplied_kms",
+                     "week_52",
+                     "week_53",
+                     "week_1",
+                     "week_2",
+                     "week_3",
+                     "week_4",
+                     "week_5",
+                     "week_6",
+                     "week_7",
+                     "week_8",
+                     "week_9",
+                     "july",
+                     "nov_2017",
+                     "dec_2017",
+                     "t",
+                     "working_holiday",
+                     "weekend_holiday",
+                     "elections",
+                     "census",
+                     "soccer_match",
+                     "long_weekend",
+                     "social_mov",
+                     "subway_cut",
+                     "subway_delay",
+                     "subway_incident",
+                     "loop",
+                     "weather",
+                     "working_eves",
+                     "subway_kms",
+                     "N_EVs",
+                     "trips_wot",
+                     "trips_w3t",
+                     "trips_wbt")
+
+B1_1 <- lm(as.formula("log_total_trx~."), data = data.all)
+```
+
+```{r}
+coef_B1_1 <- coeftest(B1_1, vcov = NeweyWest(B1_1, lag = g_1, prewhite = FALSE))
+omitted_B1 <- append(omitted_B1,names(which.max(coef_B1_1[,4])))
+coef_B1_1
+```
+
+#Estimation and saving results of the Basic Model. B1_2
+```{r}
+data.all <- data.frame(complete_db$log_TOTAL_trx, 
+                       complete_db$SATURDAY,
+                       complete_db$SUNDAY,
+                       complete_db$Metro.Hora.Punta,
+                       complete_db$kms_ofertados, 
+                       complete_db$WEEK_OF_YEAR_52,
+                       complete_db$WEEK_OF_YEAR_53,
+                       complete_db$WEEK_OF_YEAR_1,
+                       complete_db$WEEK_OF_YEAR_2,
+                       complete_db$WEEK_OF_YEAR_3,
+                       complete_db$WEEK_OF_YEAR_5,
+                       complete_db$WEEK_OF_YEAR_6,
+                       complete_db$WEEK_OF_YEAR_7,
+                       complete_db$WEEK_OF_YEAR_8,
+                       complete_db$WEEK_OF_YEAR_9,
+                       complete_db$Julio,
+                       complete_db$Nov_2017,
+                       complete_db$Dic_2017,
+                       complete_db$t,
+                       complete_db$Feriado_laboral,
+                       complete_db$Feriado_no_laboral,
+                       complete_db$Elecciones,
+                       complete_db$Censo,
+                       complete_db$Partido,
+                       complete_db$FDS_Largo,
+                       complete_db$Disturbios,
+                       complete_db$Corte_Metro,
+                       complete_db$Retraso_Metro,
+                       complete_db$Incidente_Metro,
+                       complete_db$Bucle,
+                       complete_db$Clima,
+                       complete_db$visperas_laborales,
+                       complete_db$kms_metro,
+                       complete_db$N_ZPs,
+                       complete_db$pn_SUM_EXP_no_t,
+                       complete_db$pn_SUM_EXP_3t,
+                       complete_db$pn_SUM_EXP_tm
+                       )
+
+names(data.all) <- c("log_total_trx",
+                     "saturday",
+                     "sunday",
+                     "subway_peak_fare",
+                     "supplied_kms",
+                     "week_52",
+                     "week_53",
+                     "week_1",
+                     "week_2",
+                     "week_3",
+                     "week_5",
+                     "week_6",
+                     "week_7",
+                     "week_8",
+                     "week_9",
+                     "july",
+                     "nov_2017",
+                     "dec_2017",
+                     "t",
+                     "working_holiday",
+                     "weekend_holiday",
+                     "elections",
+                     "census",
+                     "soccer_match",
+                     "long_weekend",
+                     "social_mov",
+                     "subway_cut",
+                     "subway_delay",
+                     "subway_incident",
+                     "loop",
+                     "weather",
+                     "working_eves",
+                     "subway_kms",
+                     "N_EVs",
+                     "trips_wot",
+                     "trips_w3t",
+                     "trips_wbt")
+
+B1_2 <- lm(as.formula("log_total_trx~."), data = data.all)
+```
+
+```{r}
+coef_B1_2 <- coeftest(B1_2, vcov = NeweyWest(B1_2, lag = g_1, prewhite = FALSE))
+omitted_B1 <- append(omitted_B1,names(which.max(coef_B1_2[,4])))
+coef_B1_2
+```
+
+##Estimation and saving results of the Basic Model. B1_3
+```{r}
+data.all <- data.frame(complete_db$log_TOTAL_trx, 
+                       complete_db$SATURDAY,
+                       complete_db$SUNDAY,
+                       complete_db$Metro.Hora.Punta,
+                       complete_db$kms_ofertados, 
+                       complete_db$WEEK_OF_YEAR_52,
+                       complete_db$WEEK_OF_YEAR_53,
+                       complete_db$WEEK_OF_YEAR_1,
+                       complete_db$WEEK_OF_YEAR_2,
+                       complete_db$WEEK_OF_YEAR_3,
+                       complete_db$WEEK_OF_YEAR_5,
+                       complete_db$WEEK_OF_YEAR_6,
+                       complete_db$WEEK_OF_YEAR_7,
+                       complete_db$WEEK_OF_YEAR_8,
+                       complete_db$WEEK_OF_YEAR_9,
+                       complete_db$Julio,
+                       complete_db$Nov_2017,
+                       complete_db$Dic_2017,
+                       complete_db$t,
+                       complete_db$Feriado_laboral,
+                       complete_db$Feriado_no_laboral,
+                       complete_db$Elecciones,
+                       complete_db$Censo,
+                       complete_db$Partido,
+                       complete_db$FDS_Largo,
+                       complete_db$Disturbios,
+                       complete_db$Corte_Metro,
+                       complete_db$Retraso_Metro,
+                       complete_db$Bucle,
+                       complete_db$Clima,
+                       complete_db$visperas_laborales,
+                       complete_db$kms_metro,
+                       complete_db$N_ZPs,
+                       complete_db$pn_SUM_EXP_no_t,
+                       complete_db$pn_SUM_EXP_3t,
+                       complete_db$pn_SUM_EXP_tm
+                       )
+
+names(data.all) <- c("log_total_trx",
+                     "saturday",
+                     "sunday",
+                     "subway_peak_fare",
+                     "supplied_kms",
+                     "week_52",
+                     "week_53",
+                     "week_1",
+                     "week_2",
+                     "week_3",
+                     "week_5",
+                     "week_6",
+                     "week_7",
+                     "week_8",
+                     "week_9",
+                     "july",
+                     "nov_2017",
+                     "dec_2017",
+                     "t",
+                     "working_holiday",
+                     "weekend_holiday",
+                     "elections",
+                     "census",
+                     "soccer_match",
+                     "long_weekend",
+                     "social_mov",
+                     "subway_cut",
+                     "subway_delay",
+                     "loop",
+                     "weather",
+                     "working_eves",
+                     "subway_kms",
+                     "N_EVs",
+                     "trips_wot",
+                     "trips_w3t",
+                     "trips_wbt")
+
+B1_3 <- lm(as.formula("log_total_trx~."), data = data.all)
+```
+
+```{r}
+coef_B1_3 <- coeftest(B1_3, vcov = NeweyWest(B1_3, lag = g_1, prewhite = FALSE))
+omitted_B1 <- append(omitted_B1,names(which.max(coef_B1_3[,4])))
+coef_B1_3
+```
+
+##Estimation and saving results of the Basic Model. B1_4
+```{r}
+data.all <- data.frame(complete_db$log_TOTAL_trx, 
+                       complete_db$SATURDAY,
+                       complete_db$SUNDAY,
+                       complete_db$Metro.Hora.Punta,
+                       complete_db$kms_ofertados, 
+                       complete_db$WEEK_OF_YEAR_52,
+                       complete_db$WEEK_OF_YEAR_53,
+                       complete_db$WEEK_OF_YEAR_2,
+                       complete_db$WEEK_OF_YEAR_3,
+                       complete_db$WEEK_OF_YEAR_5,
+                       complete_db$WEEK_OF_YEAR_6,
+                       complete_db$WEEK_OF_YEAR_7,
+                       complete_db$WEEK_OF_YEAR_8,
+                       complete_db$WEEK_OF_YEAR_9,
+                       complete_db$Julio,
+                       complete_db$Nov_2017,
+                       complete_db$Dic_2017,
+                       complete_db$t,
+                       complete_db$Feriado_laboral,
+                       complete_db$Feriado_no_laboral,
+                       complete_db$Elecciones,
+                       complete_db$Censo,
+                       complete_db$Partido,
+                       complete_db$FDS_Largo,
+                       complete_db$Disturbios,
+                       complete_db$Corte_Metro,
+                       complete_db$Retraso_Metro,
+                       complete_db$Bucle,
+                       complete_db$Clima,
+                       complete_db$visperas_laborales,
+                       complete_db$kms_metro,
+                       complete_db$N_ZPs,
+                       complete_db$pn_SUM_EXP_no_t,
+                       complete_db$pn_SUM_EXP_3t,
+                       complete_db$pn_SUM_EXP_tm
+                       )
+
+names(data.all) <- c("log_total_trx",
+                     "saturday",
+                     "sunday",
+                     "subway_peak_fare",
+                     "supplied_kms",
+                     "week_52",
+                     "week_53",
+                     "week_2",
+                     "week_3",
+                     "week_5",
+                     "week_6",
+                     "week_7",
+                     "week_8",
+                     "week_9",
+                     "july",
+                     "nov_2017",
+                     "dec_2017",
+                     "t",
+                     "working_holiday",
+                     "weekend_holiday",
+                     "elections",
+                     "census",
+                     "soccer_match",
+                     "long_weekend",
+                     "social_mov",
+                     "subway_cut",
+                     "subway_delay",
+                     "loop",
+                     "weather",
+                     "working_eves",
+                     "subway_kms",
+                     "N_EVs",
+                     "trips_wot",
+                     "trips_w3t",
+                     "trips_wbt")
+
+B1_4 <- lm(as.formula("log_total_trx~."), data = data.all)
+```
+
+```{r}
+coef_B1_4 <- coeftest(B1_4, vcov = NeweyWest(B1_4, lag = g_1, prewhite = FALSE))
+omitted_B1 <- append(omitted_B1,names(which.max(coef_B1_4[,4])))
+coef_B1_4
+```
+
+##Estimation and saving results of the Basic Model. B1_5
+```{r}
+data.all <- data.frame(complete_db$log_TOTAL_trx, 
+                       complete_db$SATURDAY,
+                       complete_db$SUNDAY,
+                       complete_db$Metro.Hora.Punta,
+                       complete_db$kms_ofertados, 
+                       complete_db$WEEK_OF_YEAR_52,
+                       complete_db$WEEK_OF_YEAR_53,
+                       complete_db$WEEK_OF_YEAR_2,
+                       complete_db$WEEK_OF_YEAR_3,
+                       complete_db$WEEK_OF_YEAR_5,
+                       complete_db$WEEK_OF_YEAR_6,
+                       complete_db$WEEK_OF_YEAR_7,
+                       complete_db$WEEK_OF_YEAR_8,
+                       complete_db$WEEK_OF_YEAR_9,
+                       complete_db$Julio,
+                       complete_db$Nov_2017,
+                       complete_db$Dic_2017,
+                       complete_db$t,
+                       complete_db$Feriado_laboral,
+                       complete_db$Feriado_no_laboral,
+                       complete_db$Elecciones,
+                       complete_db$Censo,
+                       complete_db$Partido,
+                       complete_db$FDS_Largo,
+                       complete_db$Disturbios,
+                       complete_db$Corte_Metro,
+                       complete_db$Retraso_Metro,
+                       complete_db$Bucle,
+                       complete_db$Clima,
+                       complete_db$kms_metro,
+                       complete_db$N_ZPs,
+                       complete_db$pn_SUM_EXP_no_t,
+                       complete_db$pn_SUM_EXP_3t,
+                       complete_db$pn_SUM_EXP_tm
+                       )
+
+names(data.all) <- c("log_total_trx",
+                     "saturday",
+                     "sunday",
+                     "subway_peak_fare",
+                     "supplied_kms",
+                     "week_52",
+                     "week_53",
+                     "week_2",
+                     "week_3",
+                     "week_5",
+                     "week_6",
+                     "week_7",
+                     "week_8",
+                     "week_9",
+                     "july",
+                     "nov_2017",
+                     "dec_2017",
+                     "t",
+                     "working_holiday",
+                     "weekend_holiday",
+                     "elections",
+                     "census",
+                     "soccer_match",
+                     "long_weekend",
+                     "social_mov",
+                     "subway_cut",
+                     "subway_delay",
+                     "loop",
+                     "weather",
+                     "subway_kms",
+                     "N_EVs",
+                     "trips_wot",
+                     "trips_w3t",
+                     "trips_wbt")
+
+B1_5 <- lm(as.formula("log_total_trx~."), data = data.all)
+```
+
+```{r}
+coef_B1_5 <- coeftest(B1_5, vcov = NeweyWest(B1_5, lag = g_1, prewhite = FALSE))
+omitted_B1 <- append(omitted_B1,names(which.max(coef_B1_5[,4])))
+coef_B1_5
+```
+
+##Estimation and saving results of the Basic Model. B1_6
+```{r}
+data.all <- data.frame(complete_db$log_TOTAL_trx, 
+                       complete_db$SATURDAY,
+                       complete_db$SUNDAY,
+                       complete_db$Metro.Hora.Punta,
+                       complete_db$kms_ofertados, 
+                       complete_db$WEEK_OF_YEAR_52,
+                       complete_db$WEEK_OF_YEAR_53,
+                       complete_db$WEEK_OF_YEAR_2,
+                       complete_db$WEEK_OF_YEAR_3,
+                       complete_db$WEEK_OF_YEAR_5,
+                       complete_db$WEEK_OF_YEAR_6,
+                       complete_db$WEEK_OF_YEAR_7,
+                       complete_db$WEEK_OF_YEAR_8,
+                       complete_db$Julio,
+                       complete_db$Nov_2017,
+                       complete_db$Dic_2017,
+                       complete_db$t,
+                       complete_db$Feriado_laboral,
+                       complete_db$Feriado_no_laboral,
+                       complete_db$Elecciones,
+                       complete_db$Censo,
+                       complete_db$Partido,
+                       complete_db$FDS_Largo,
+                       complete_db$Disturbios,
+                       complete_db$Corte_Metro,
+                       complete_db$Retraso_Metro,
+                       complete_db$Bucle,
+                       complete_db$Clima,
+                       complete_db$kms_metro,
+                       complete_db$N_ZPs,
+                       complete_db$pn_SUM_EXP_no_t,
+                       complete_db$pn_SUM_EXP_3t,
+                       complete_db$pn_SUM_EXP_tm
+                       )
+
+names(data.all) <- c("log_total_trx",
+                     "saturday",
+                     "sunday",
+                     "subway_peak_fare",
+                     "supplied_kms",
+                     "week_52",
+                     "week_53",
+                     "week_2",
+                     "week_3",
+                     "week_5",
+                     "week_6",
+                     "week_7",
+                     "week_8",
+                     "july",
+                     "nov_2017",
+                     "dec_2017",
+                     "t",
+                     "working_holiday",
+                     "weekend_holiday",
+                     "elections",
+                     "census",
+                     "soccer_match",
+                     "long_weekend",
+                     "social_mov",
+                     "subway_cut",
+                     "subway_delay",
+                     "loop",
+                     "weather",
+                     "subway_kms",
+                     "N_EVs",
+                     "trips_wot",
+                     "trips_w3t",
+                     "trips_wbt")
+
+B1_6 <- lm(as.formula("log_total_trx~."), data = data.all)
+```
+
+```{r}
+coef_B1_6 <- coeftest(B1_6, vcov = NeweyWest(B1_6, lag = g_1, prewhite = FALSE))
+omitted_B1 <- append(omitted_B1,names(which.max(coef_B1_6[,4])))
+coef_B1_6
+```
+
+##Estimation and saving results of the Basic Model. B1_7
+```{r}
+data.all <- data.frame(complete_db$log_TOTAL_trx, 
+                       complete_db$SATURDAY,
+                       complete_db$SUNDAY,
+                       complete_db$Metro.Hora.Punta,
+                       complete_db$kms_ofertados, 
+                       complete_db$WEEK_OF_YEAR_52,
+                       complete_db$WEEK_OF_YEAR_53,
+                       complete_db$WEEK_OF_YEAR_2,
+                       complete_db$WEEK_OF_YEAR_3,
+                       complete_db$WEEK_OF_YEAR_5,
+                       complete_db$WEEK_OF_YEAR_6,
+                       complete_db$WEEK_OF_YEAR_7,
+                       complete_db$WEEK_OF_YEAR_8,
+                       complete_db$Julio,
+                       complete_db$Nov_2017,
+                       complete_db$Dic_2017,
+                       complete_db$t,
+                       complete_db$Feriado_laboral,
+                       complete_db$Feriado_no_laboral,
+                       complete_db$Elecciones,
+                       complete_db$Censo,
+                       complete_db$Partido,
+                       complete_db$FDS_Largo,
+                       complete_db$Disturbios,
+                       complete_db$Retraso_Metro,
+                       complete_db$Bucle,
+                       complete_db$Clima,
+                       complete_db$kms_metro,
+                       complete_db$N_ZPs,
+                       complete_db$pn_SUM_EXP_no_t,
+                       complete_db$pn_SUM_EXP_3t,
+                       complete_db$pn_SUM_EXP_tm
+                       )
+
+names(data.all) <- c("log_total_trx",
+                     "saturday",
+                     "sunday",
+                     "subway_peak_fare",
+                     "supplied_kms",
+                     "week_52",
+                     "week_53",
+                     "week_2",
+                     "week_3",
+                     "week_5",
+                     "week_6",
+                     "week_7",
+                     "week_8",
+                     "july",
+                     "nov_2017",
+                     "dec_2017",
+                     "t",
+                     "working_holiday",
+                     "weekend_holiday",
+                     "elections",
+                     "census",
+                     "soccer_match",
+                     "long_weekend",
+                     "social_mov",
+                     "subway_delay",
+                     "loop",
+                     "weather",
+                     "subway_kms",
+                     "N_EVs",
+                     "trips_wot",
+                     "trips_w3t",
+                     "trips_wbt")
+
+B1_7 <- lm(as.formula("log_total_trx~."), data = data.all)
+```
+
+```{r}
+coef_B1_7 <- coeftest(B1_7, vcov = NeweyWest(B1_7, lag = g_1, prewhite = FALSE))
+omitted_B1 <- append(omitted_B1,names(which.max(coef_B1_7[,4])))
+coef_B1_7
+```
+
+##Estimation and saving results of the Basic Model. B1_8
+```{r}
+data.all <- data.frame(complete_db$log_TOTAL_trx, 
+                       complete_db$SUNDAY,
+                       complete_db$Metro.Hora.Punta,
+                       complete_db$kms_ofertados, 
+                       complete_db$WEEK_OF_YEAR_52,
+                       complete_db$WEEK_OF_YEAR_53,
+                       complete_db$WEEK_OF_YEAR_2,
+                       complete_db$WEEK_OF_YEAR_3,
+                       complete_db$WEEK_OF_YEAR_5,
+                       complete_db$WEEK_OF_YEAR_6,
+                       complete_db$WEEK_OF_YEAR_7,
+                       complete_db$WEEK_OF_YEAR_8,
+                       complete_db$Julio,
+                       complete_db$Nov_2017,
+                       complete_db$Dic_2017,
+                       complete_db$t,
+                       complete_db$Feriado_laboral,
+                       complete_db$Feriado_no_laboral,
+                       complete_db$Elecciones,
+                       complete_db$Censo,
+                       complete_db$Partido,
+                       complete_db$FDS_Largo,
+                       complete_db$Disturbios,
+                       complete_db$Retraso_Metro,
+                       complete_db$Bucle,
+                       complete_db$Clima,
+                       complete_db$kms_metro,
+                       complete_db$N_ZPs,
+                       complete_db$pn_SUM_EXP_no_t,
+                       complete_db$pn_SUM_EXP_3t,
+                       complete_db$pn_SUM_EXP_tm
+                       )
+
+names(data.all) <- c("log_total_trx",
+                     "sunday",
+                     "subway_peak_fare",
+                     "supplied_kms",
+                     "week_52",
+                     "week_53",
+                     "week_2",
+                     "week_3",
+                     "week_5",
+                     "week_6",
+                     "week_7",
+                     "week_8",
+                     "july",
+                     "nov_2017",
+                     "dec_2017",
+                     "t",
+                     "working_holiday",
+                     "weekend_holiday",
+                     "elections",
+                     "census",
+                     "soccer_match",
+                     "long_weekend",
+                     "social_mov",
+                     "subway_delay",
+                     "loop",
+                     "weather",
+                     "subway_kms",
+                     "N_EVs",
+                     "trips_wot",
+                     "trips_w3t",
+                     "trips_wbt")
+
+B1_8 <- lm(as.formula("log_total_trx~."), data = data.all)
+```
+
+```{r}
+coef_B1_8 <- coeftest(B1_8, vcov = NeweyWest(B1_8, lag = g_1, prewhite = FALSE))
+omitted_B1 <- append(omitted_B1,names(which.max(coef_B1_8[,4])))
+coef_B1_8
+```
+
+##Estimation and saving results of the Basic Model. B1_9
+```{r}
+data.all <- data.frame(complete_db$log_TOTAL_trx, 
+                       complete_db$SUNDAY,
+                       complete_db$kms_ofertados, 
+                       complete_db$WEEK_OF_YEAR_52,
+                       complete_db$WEEK_OF_YEAR_53,
+                       complete_db$WEEK_OF_YEAR_2,
+                       complete_db$WEEK_OF_YEAR_3,
+                       complete_db$WEEK_OF_YEAR_5,
+                       complete_db$WEEK_OF_YEAR_6,
+                       complete_db$WEEK_OF_YEAR_7,
+                       complete_db$WEEK_OF_YEAR_8,
+                       complete_db$Julio,
+                       complete_db$Nov_2017,
+                       complete_db$Dic_2017,
+                       complete_db$t,
+                       complete_db$Feriado_laboral,
+                       complete_db$Feriado_no_laboral,
+                       complete_db$Elecciones,
+                       complete_db$Censo,
+                       complete_db$Partido,
+                       complete_db$FDS_Largo,
+                       complete_db$Disturbios,
+                       complete_db$Retraso_Metro,
+                       complete_db$Bucle,
+                       complete_db$Clima,
+                       complete_db$kms_metro,
+                       complete_db$N_ZPs,
+                       complete_db$pn_SUM_EXP_no_t,
+                       complete_db$pn_SUM_EXP_3t,
+                       complete_db$pn_SUM_EXP_tm
+                       )
+
+names(data.all) <- c("log_total_trx",
+                     "sunday",
+                     "supplied_kms",
+                     "week_52",
+                     "week_53",
+                     "week_2",
+                     "week_3",
+                     "week_5",
+                     "week_6",
+                     "week_7",
+                     "week_8",
+                     "july",
+                     "nov_2017",
+                     "dec_2017",
+                     "t",
+                     "working_holiday",
+                     "weekend_holiday",
+                     "elections",
+                     "census",
+                     "soccer_match",
+                     "long_weekend",
+                     "social_mov",
+                     "subway_delay",
+                     "loop",
+                     "weather",
+                     "subway_kms",
+                     "N_EVs",
+                     "trips_wot",
+                     "trips_w3t",
+                     "trips_wbt")
+
+B1_9 <- lm(as.formula("log_total_trx~."), data = data.all)
+```
+
+```{r}
+coef_B1_9 <- coeftest(B1_9, vcov = NeweyWest(B1_9, lag = g_1, prewhite = FALSE))
+#omitted_B1 <- append(omitted_B1,names(which.max(coef_B1_9[,4]))) #BE AWARE OF THIS!
+omitted_B1[9] <- "subway_delay"
+coef_B1_9
+```
+
+##Estimation and saving results of the Basic Model. B1_10
+```{r}
+data.all <- data.frame(complete_db$log_TOTAL_trx, 
+                       complete_db$SUNDAY,
+                       complete_db$kms_ofertados, 
+                       complete_db$WEEK_OF_YEAR_52,
+                       complete_db$WEEK_OF_YEAR_53,
+                       complete_db$WEEK_OF_YEAR_2,
+                       complete_db$WEEK_OF_YEAR_3,
+                       complete_db$WEEK_OF_YEAR_5,
+                       complete_db$WEEK_OF_YEAR_6,
+                       complete_db$WEEK_OF_YEAR_7,
+                       complete_db$WEEK_OF_YEAR_8,
+                       complete_db$Julio,
+                       complete_db$Nov_2017,
+                       complete_db$Dic_2017,
+                       complete_db$t,
+                       complete_db$Feriado_laboral,
+                       complete_db$Feriado_no_laboral,
+                       complete_db$Elecciones,
+                       complete_db$Censo,
+                       complete_db$Partido,
+                       complete_db$FDS_Largo,
+                       complete_db$Disturbios,
+                       complete_db$Bucle,
+                       complete_db$Clima,
+                       complete_db$kms_metro,
+                       complete_db$N_ZPs,
+                       complete_db$pn_SUM_EXP_no_t,
+                       complete_db$pn_SUM_EXP_3t,
+                       complete_db$pn_SUM_EXP_tm
+                       )
+
+names(data.all) <- c("log_total_trx",
+                     "sunday",
+                     "supplied_kms",
+                     "week_52",
+                     "week_53",
+                     "week_2",
+                     "week_3",
+                     "week_5",
+                     "week_6",
+                     "week_7",
+                     "week_8",
+                     "july",
+                     "nov_2017",
+                     "dec_2017",
+                     "t",
+                     "working_holiday",
+                     "weekend_holiday",
+                     "elections",
+                     "census",
+                     "soccer_match",
+                     "long_weekend",
+                     "social_mov",
+                     "loop",
+                     "weather",
+                     "subway_kms",
+                     "N_EVs",
+                     "trips_wot",
+                     "trips_w3t",
+                     "trips_wbt")
+
+B1_10 <- lm(as.formula("log_total_trx~."), data = data.all)
+```
+
+```{r}
+coef_B1_10 <- coeftest(B1_10, vcov = NeweyWest(B1_10, lag = g_1, prewhite = FALSE))
+#omitted_B1 <- append(omitted_B1,names(which.max(coef_B1_10[,4]))) #BE AWARE OF THIS!
+omitted_B1[10] <- "week_5"
+coef_B1_10
+```
+
+##Estimation and saving results of the Basic Model. B1_11
+```{r}
+data.all <- data.frame(complete_db$log_TOTAL_trx, 
+                       complete_db$SUNDAY,
+                       complete_db$kms_ofertados, 
+                       complete_db$WEEK_OF_YEAR_52,
+                       complete_db$WEEK_OF_YEAR_53,
+                       complete_db$WEEK_OF_YEAR_2,
+                       complete_db$WEEK_OF_YEAR_3,
+                       complete_db$WEEK_OF_YEAR_6,
+                       complete_db$WEEK_OF_YEAR_7,
+                       complete_db$WEEK_OF_YEAR_8,
+                       complete_db$Julio,
+                       complete_db$Nov_2017,
+                       complete_db$Dic_2017,
+                       complete_db$t,
+                       complete_db$Feriado_laboral,
+                       complete_db$Feriado_no_laboral,
+                       complete_db$Elecciones,
+                       complete_db$Censo,
+                       complete_db$Partido,
+                       complete_db$FDS_Largo,
+                       complete_db$Disturbios,
+                       complete_db$Bucle,
+                       complete_db$Clima,
+                       complete_db$kms_metro,
+                       complete_db$N_ZPs,
+                       complete_db$pn_SUM_EXP_no_t,
+                       complete_db$pn_SUM_EXP_3t,
+                       complete_db$pn_SUM_EXP_tm
+                       )
+
+names(data.all) <- c("log_total_trx",
+                     "sunday",
+                     "supplied_kms",
+                     "week_52",
+                     "week_53",
+                     "week_2",
+                     "week_3",
+                     "week_6",
+                     "week_7",
+                     "week_8",
+                     "july",
+                     "nov_2017",
+                     "dec_2017",
+                     "t",
+                     "working_holiday",
+                     "weekend_holiday",
+                     "elections",
+                     "census",
+                     "soccer_match",
+                     "long_weekend",
+                     "social_mov",
+                     "loop",
+                     "weather",
+                     "subway_kms",
+                     "N_EVs",
+                     "trips_wot",
+                     "trips_w3t",
+                     "trips_wbt")
+
+B1_11 <- lm(as.formula("log_total_trx~."), data = data.all)
+```
+
+```{r}
+coef_B1_11 <- coeftest(B1_11, vcov = NeweyWest(B1_11, lag = g_1, prewhite = FALSE))
+#omitted_B1 <- append(omitted_B1,names(which.max(coef_B1_11[,4]))) #BE AWARE OF THIS!
+omitted_B1[11] <- "loop"
+coef_B1_11
+```
+
+##Estimation and saving results of the Basic Model. B1_12
+```{r}
+data.all <- data.frame(complete_db$log_TOTAL_trx, 
+                       complete_db$SUNDAY,
+                       complete_db$kms_ofertados, 
+                       complete_db$WEEK_OF_YEAR_52,
+                       complete_db$WEEK_OF_YEAR_53,
+                       complete_db$WEEK_OF_YEAR_2,
+                       complete_db$WEEK_OF_YEAR_3,
+                       complete_db$WEEK_OF_YEAR_6,
+                       complete_db$WEEK_OF_YEAR_7,
+                       complete_db$WEEK_OF_YEAR_8,
+                       complete_db$Julio,
+                       complete_db$Nov_2017,
+                       complete_db$Dic_2017,
+                       complete_db$t,
+                       complete_db$Feriado_laboral,
+                       complete_db$Feriado_no_laboral,
+                       complete_db$Elecciones,
+                       complete_db$Censo,
+                       complete_db$Partido,
+                       complete_db$FDS_Largo,
+                       complete_db$Disturbios,
+                       complete_db$Clima,
+                       complete_db$kms_metro,
+                       complete_db$N_ZPs,
+                       complete_db$pn_SUM_EXP_no_t,
+                       complete_db$pn_SUM_EXP_3t,
+                       complete_db$pn_SUM_EXP_tm
+                       )
+
+names(data.all) <- c("log_total_trx",
+                     "sunday",
+                     "supplied_kms",
+                     "week_52",
+                     "week_53",
+                     "week_2",
+                     "week_3",
+                     "week_6",
+                     "week_7",
+                     "week_8",
+                     "july",
+                     "nov_2017",
+                     "dec_2017",
+                     "t",
+                     "working_holiday",
+                     "weekend_holiday",
+                     "elections",
+                     "census",
+                     "soccer_match",
+                     "long_weekend",
+                     "social_mov",
+                     "weather",
+                     "subway_kms",
+                     "N_EVs",
+                     "trips_wot",
+                     "trips_w3t",
+                     "trips_wbt")
+
+B1_12 <- lm(as.formula("log_total_trx~."), data = data.all)
+```
+
+```{r}
+coef_B1_12 <- coeftest(B1_12, vcov = NeweyWest(B1_12, lag = g_1, prewhite = FALSE))
+#omitted_B1 <- append(omitted_B1,names(which.max(coef_B1_11[,4]))) #BE AWARE OF THIS!
+omitted_B1[12] <- "soccer_match"
+coef_B1_12
+```
+
+##Estimation and saving results of the Basic Model. B1_13
+```{r}
+data.all <- data.frame(complete_db$log_TOTAL_trx, 
+                       complete_db$SUNDAY,
+                       complete_db$kms_ofertados, 
+                       complete_db$WEEK_OF_YEAR_52,
+                       complete_db$WEEK_OF_YEAR_53,
+                       complete_db$WEEK_OF_YEAR_2,
+                       complete_db$WEEK_OF_YEAR_3,
+                       complete_db$WEEK_OF_YEAR_6,
+                       complete_db$WEEK_OF_YEAR_7,
+                       complete_db$WEEK_OF_YEAR_8,
+                       complete_db$Julio,
+                       complete_db$Nov_2017,
+                       complete_db$Dic_2017,
+                       complete_db$t,
+                       complete_db$Feriado_laboral,
+                       complete_db$Feriado_no_laboral,
+                       complete_db$Elecciones,
+                       complete_db$Censo,
+                       complete_db$FDS_Largo,
+                       complete_db$Disturbios,
+                       complete_db$Clima,
+                       complete_db$kms_metro,
+                       complete_db$N_ZPs,
+                       complete_db$pn_SUM_EXP_no_t,
+                       complete_db$pn_SUM_EXP_3t,
+                       complete_db$pn_SUM_EXP_tm
+                       )
+
+names(data.all) <- c("log_total_trx",
+                     "sunday",
+                     "supplied_kms",
+                     "week_52",
+                     "week_53",
+                     "week_2",
+                     "week_3",
+                     "week_6",
+                     "week_7",
+                     "week_8",
+                     "july",
+                     "nov_2017",
+                     "dec_2017",
+                     "t",
+                     "working_holiday",
+                     "weekend_holiday",
+                     "elections",
+                     "census",
+                     "long_weekend",
+                     "social_mov",
+                     "weather",
+                     "subway_kms",
+                     "N_EVs",
+                     "trips_wot",
+                     "trips_w3t",
+                     "trips_wbt")
+
+B1_13 <- lm(as.formula("log_total_trx~."), data = data.all)
+```
+
+```{r}
+coef_B1_13 <- coeftest(B1_13, vcov = NeweyWest(B1_13, lag = g_1, prewhite = FALSE))
+#omitted_B1 <- append(omitted_B1,names(which.max(coef_B1_11[,4]))) #BE AWARE OF THIS!
+omitted_B1[13] <- "week_3"
+coef_B1_13
+```
+
+##Estimation and saving results of the Basic Model. B1_14
+```{r}
+data.all <- data.frame(complete_db$log_TOTAL_trx, 
+                       complete_db$SUNDAY,
+                       complete_db$kms_ofertados, 
+                       complete_db$WEEK_OF_YEAR_52,
+                       complete_db$WEEK_OF_YEAR_53,
+                       complete_db$WEEK_OF_YEAR_2,
+                       complete_db$WEEK_OF_YEAR_6,
+                       complete_db$WEEK_OF_YEAR_7,
+                       complete_db$WEEK_OF_YEAR_8,
+                       complete_db$Julio,
+                       complete_db$Nov_2017,
+                       complete_db$Dic_2017,
+                       complete_db$t,
+                       complete_db$Feriado_laboral,
+                       complete_db$Feriado_no_laboral,
+                       complete_db$Elecciones,
+                       complete_db$Censo,
+                       complete_db$FDS_Largo,
+                       complete_db$Disturbios,
+                       complete_db$Clima,
+                       complete_db$kms_metro,
+                       complete_db$N_ZPs,
+                       complete_db$pn_SUM_EXP_no_t,
+                       complete_db$pn_SUM_EXP_3t,
+                       complete_db$pn_SUM_EXP_tm
+                       )
+
+names(data.all) <- c("log_total_trx",
+                     "sunday",
+                     "supplied_kms",
+                     "week_52",
+                     "week_53",
+                     "week_2",
+                     "week_6",
+                     "week_7",
+                     "week_8",
+                     "july",
+                     "nov_2017",
+                     "dec_2017",
+                     "t",
+                     "working_holiday",
+                     "weekend_holiday",
+                     "elections",
+                     "census",
+                     "long_weekend",
+                     "social_mov",
+                     "weather",
+                     "subway_kms",
+                     "N_EVs",
+                     "trips_wot",
+                     "trips_w3t",
+                     "trips_wbt")
+
+B1_14 <- lm(as.formula("log_total_trx~."), data = data.all)
+```
+
+```{r}
+coef_B1_14 <- coeftest(B1_14, vcov = NeweyWest(B1_14, lag = g_1, prewhite = FALSE))
+#omitted_B1 <- append(omitted_B1,names(which.max(coef_B1_11[,4]))) #BE AWARE OF THIS!
+omitted_B1[14] <- "week_2"
+coef_B1_14
+```
+
+##Estimation and saving results of the Basic Model. B1_15
+```{r}
+data.all <- data.frame(complete_db$log_TOTAL_trx, 
+                       complete_db$SUNDAY,
+                       complete_db$kms_ofertados, 
+                       complete_db$WEEK_OF_YEAR_52,
+                       complete_db$WEEK_OF_YEAR_53,
+                       complete_db$WEEK_OF_YEAR_6,
+                       complete_db$WEEK_OF_YEAR_7,
+                       complete_db$WEEK_OF_YEAR_8,
+                       complete_db$Julio,
+                       complete_db$Nov_2017,
+                       complete_db$Dic_2017,
+                       complete_db$t,
+                       complete_db$Feriado_laboral,
+                       complete_db$Feriado_no_laboral,
+                       complete_db$Elecciones,
+                       complete_db$Censo,
+                       complete_db$FDS_Largo,
+                       complete_db$Disturbios,
+                       complete_db$Clima,
+                       complete_db$kms_metro,
+                       complete_db$N_ZPs,
+                       complete_db$pn_SUM_EXP_no_t,
+                       complete_db$pn_SUM_EXP_3t,
+                       complete_db$pn_SUM_EXP_tm
+                       )
+
+names(data.all) <- c("log_total_trx",
+                     "sunday",
+                     "supplied_kms",
+                     "week_52",
+                     "week_53",
+                     "week_6",
+                     "week_7",
+                     "week_8",
+                     "july",
+                     "nov_2017",
+                     "dec_2017",
+                     "t",
+                     "working_holiday",
+                     "weekend_holiday",
+                     "elections",
+                     "census",
+                     "long_weekend",
+                     "social_mov",
+                     "weather",
+                     "subway_kms",
+                     "N_EVs",
+                     "trips_wot",
+                     "trips_w3t",
+                     "trips_wbt")
+
+B1_15 <- lm(as.formula("log_total_trx~."), data = data.all)
+```
+
+```{r}
+coef_B1_15 <- coeftest(B1_15, vcov = NeweyWest(B1_15, lag = g_1, prewhite = FALSE))
+#omitted_B1 <- append(omitted_B1,names(which.max(coef_B1_11[,4]))) #BE AWARE OF THIS!
+omitted_B1[15] <- "t"
+coef_B1_15
+```
+
+##Estimation and saving results of the Basic Model. B1_16
+```{r}
+data.all <- data.frame(complete_db$log_TOTAL_trx, 
+                       complete_db$SUNDAY,
+                       complete_db$kms_ofertados, 
+                       complete_db$WEEK_OF_YEAR_52,
+                       complete_db$WEEK_OF_YEAR_53,
+                       complete_db$WEEK_OF_YEAR_6,
+                       complete_db$WEEK_OF_YEAR_7,
+                       complete_db$WEEK_OF_YEAR_8,
+                       complete_db$Julio,
+                       complete_db$Nov_2017,
+                       complete_db$Dic_2017,
+                       complete_db$Feriado_laboral,
+                       complete_db$Feriado_no_laboral,
+                       complete_db$Elecciones,
+                       complete_db$Censo,
+                       complete_db$FDS_Largo,
+                       complete_db$Disturbios,
+                       complete_db$Clima,
+                       complete_db$kms_metro,
+                       complete_db$N_ZPs,
+                       complete_db$pn_SUM_EXP_no_t,
+                       complete_db$pn_SUM_EXP_3t,
+                       complete_db$pn_SUM_EXP_tm
+                       )
+
+names(data.all) <- c("log_total_trx",
+                     "sunday",
+                     "supplied_kms",
+                     "week_52",
+                     "week_53",
+                     "week_6",
+                     "week_7",
+                     "week_8",
+                     "july",
+                     "nov_2017",
+                     "dec_2017",
+                     "working_holiday",
+                     "weekend_holiday",
+                     "elections",
+                     "census",
+                     "long_weekend",
+                     "social_mov",
+                     "weather",
+                     "subway_kms",
+                     "N_EVs",
+                     "trips_wot",
+                     "trips_w3t",
+                     "trips_wbt")
+
+B1_16 <- lm(as.formula("log_total_trx~."), data = data.all)
+```
+
+```{r}
+coef_B1_16 <- coeftest(B1_16, vcov = NeweyWest(B1_16, lag = g_1, prewhite = FALSE))
+#omitted_B1 <- append(omitted_B1,names(which.max(coef_B1_11[,4]))) #BE AWARE OF THIS!
+omitted_B1[16] <- "elections"
+coef_B1_16
+```
+
+##Estimation and saving results of the Basic Model. B1_17
+```{r}
+data.all <- data.frame(complete_db$log_TOTAL_trx, 
+                       complete_db$SUNDAY,
+                       complete_db$kms_ofertados, 
+                       complete_db$WEEK_OF_YEAR_52,
+                       complete_db$WEEK_OF_YEAR_53,
+                       complete_db$WEEK_OF_YEAR_6,
+                       complete_db$WEEK_OF_YEAR_7,
+                       complete_db$WEEK_OF_YEAR_8,
+                       complete_db$Julio,
+                       complete_db$Nov_2017,
+                       complete_db$Dic_2017,
+                       complete_db$Feriado_laboral,
+                       complete_db$Feriado_no_laboral,
+                       complete_db$Censo,
+                       complete_db$FDS_Largo,
+                       complete_db$Disturbios,
+                       complete_db$Clima,
+                       complete_db$kms_metro,
+                       complete_db$N_ZPs,
+                       complete_db$pn_SUM_EXP_no_t,
+                       complete_db$pn_SUM_EXP_3t,
+                       complete_db$pn_SUM_EXP_tm
+                       )
+
+names(data.all) <- c("log_total_trx",
+                     "sunday",
+                     "supplied_kms",
+                     "week_52",
+                     "week_53",
+                     "week_6",
+                     "week_7",
+                     "week_8",
+                     "july",
+                     "nov_2017",
+                     "dec_2017",
+                     "working_holiday",
+                     "weekend_holiday",
+                     "census",
+                     "long_weekend",
+                     "social_mov",
+                     "weather",
+                     "subway_kms",
+                     "N_EVs",
+                     "trips_wot",
+                     "trips_w3t",
+                     "trips_wbt")
+
+B1_17 <- lm(as.formula("log_total_trx~."), data = data.all)
+```
+
+```{r}
+coef_B1_17 <- coeftest(B1_17, vcov = NeweyWest(B1_17, lag = g_1, prewhite = FALSE))
+#omitted_B1 <- append(omitted_B1,names(which.max(coef_B1_11[,4]))) #BE AWARE OF THIS!
+#omitted_B1[17] <- "elections"
+coef_B1_17
+```
+
+##Estimation and saving results of the Basic Model. B2_1
+```{r}
+omitted_B2 <- character()
+
+data.all <- data.frame(complete_db$log_TOTAL_trx, 
+                       complete_db$SUNDAY,
+                       complete_db$kms_U1,
+                       complete_db$kms_U2,
+                       complete_db$kms_U3,
+                       complete_db$kms_U4,
+                       complete_db$kms_U5,
+                       complete_db$kms_U6,
+                       complete_db$kms_U7,
+                       complete_db$WEEK_OF_YEAR_52,
+                       complete_db$WEEK_OF_YEAR_53,
+                       complete_db$WEEK_OF_YEAR_6,
+                       complete_db$WEEK_OF_YEAR_7,
+                       complete_db$WEEK_OF_YEAR_8,
+                       complete_db$Julio,
+                       complete_db$Nov_2017,
+                       complete_db$Dic_2017,
+                       complete_db$Feriado_laboral,
+                       complete_db$Feriado_no_laboral,
+                       complete_db$Censo,
+                       complete_db$FDS_Largo,
+                       complete_db$Disturbios,
+                       complete_db$Clima,
+                       complete_db$kms_metro,
+                       complete_db$N_ZPs,
+                       complete_db$pn_SUM_EXP_no_t,
+                       complete_db$pn_SUM_EXP_3t,
+                       complete_db$pn_SUM_EXP_tm
+                       )
+
+names(data.all) <- c("log_total_trx",
+                     "sunday",
+                     "supplied_kms_U1",
+                     "supplied_kms_U2",
+                     "supplied_kms_U3",
+                     "supplied_kms_U4",
+                     "supplied_kms_U5",
+                     "supplied_kms_U6",
+                     "supplied_kms_U7",
+                     "week_52",
+                     "week_53",
+                     "week_6",
+                     "week_7",
+                     "week_8",
+                     "july",
+                     "nov_2017",
+                     "dec_2017",
+                     "working_holiday",
+                     "weekend_holiday",
+                     "census",
+                     "long_weekend",
+                     "social_mov",
+                     "weather",
+                     "subway_kms",
+                     "N_EVs",
+                     "trips_wot",
+                     "trips_w3t",
+                     "trips_wbt")
+
+B2_1 <- lm(as.formula("log_total_trx~."), data = data.all)
+```
+
+```{r}
+coef_B2_1 <- coeftest(B2_1, vcov = NeweyWest(B2_1, lag = g_1, prewhite = FALSE))
+omitted_B2 <- append(omitted_B2,names(which.max(coef_B2_1[,4]))) #BE AWARE OF THIS!
+coef_B2_1
+```
+
+##Estimation and saving results of the Basic Model. B2_2
+```{r}
+data.all <- data.frame(complete_db$log_TOTAL_trx, 
+                       complete_db$SUNDAY,
+                       complete_db$kms_U1,
+                       complete_db$kms_U2,
+                       complete_db$kms_U3,
+                       complete_db$kms_U4,
+                       complete_db$kms_U5,
+                       complete_db$kms_U6,
+                       complete_db$kms_U7,
+                       complete_db$WEEK_OF_YEAR_52,
+                       complete_db$WEEK_OF_YEAR_53,
+                       complete_db$WEEK_OF_YEAR_7,
+                       complete_db$WEEK_OF_YEAR_8,
+                       complete_db$Julio,
+                       complete_db$Nov_2017,
+                       complete_db$Dic_2017,
+                       complete_db$Feriado_laboral,
+                       complete_db$Feriado_no_laboral,
+                       complete_db$Censo,
+                       complete_db$FDS_Largo,
+                       complete_db$Disturbios,
+                       complete_db$Clima,
+                       complete_db$kms_metro,
+                       complete_db$N_ZPs,
+                       complete_db$pn_SUM_EXP_no_t,
+                       complete_db$pn_SUM_EXP_3t,
+                       complete_db$pn_SUM_EXP_tm
+                       )
+
+names(data.all) <- c("log_total_trx",
+                     "sunday",
+                     "supplied_kms_U1",
+                     "supplied_kms_U2",
+                     "supplied_kms_U3",
+                     "supplied_kms_U4",
+                     "supplied_kms_U5",
+                     "supplied_kms_U6",
+                     "supplied_kms_U7",
+                     "week_52",
+                     "week_53",
+                     "week_7",
+                     "week_8",
+                     "july",
+                     "nov_2017",
+                     "dec_2017",
+                     "working_holiday",
+                     "weekend_holiday",
+                     "census",
+                     "long_weekend",
+                     "social_mov",
+                     "weather",
+                     "subway_kms",
+                     "N_EVs",
+                     "trips_wot",
+                     "trips_w3t",
+                     "trips_wbt")
+
+B2_2 <- lm(as.formula("log_total_trx~."), data = data.all)
+```
+
+```{r}
+coef_B2_2 <- coeftest(B2_2, vcov = NeweyWest(B2_2, lag = g_1, prewhite = FALSE))
+omitted_B2 <- append(omitted_B2,names(which.max(coef_B2_2[,4]))) #BE AWARE OF THIS!
+coef_B2_2
+```
+
+##Estimation and saving results of the Basic Model. B2_3
+```{r}
+data.all <- data.frame(complete_db$log_TOTAL_trx, 
+                       complete_db$SUNDAY,
+                       complete_db$kms_U1,
+                       complete_db$kms_U2,
+                       complete_db$kms_U3,
+                       complete_db$kms_U4,
+                       complete_db$kms_U6,
+                       complete_db$kms_U7,
+                       complete_db$WEEK_OF_YEAR_52,
+                       complete_db$WEEK_OF_YEAR_53,
+                       complete_db$WEEK_OF_YEAR_7,
+                       complete_db$WEEK_OF_YEAR_8,
+                       complete_db$Julio,
+                       complete_db$Nov_2017,
+                       complete_db$Dic_2017,
+                       complete_db$Feriado_laboral,
+                       complete_db$Feriado_no_laboral,
+                       complete_db$Censo,
+                       complete_db$FDS_Largo,
+                       complete_db$Disturbios,
+                       complete_db$Clima,
+                       complete_db$kms_metro,
+                       complete_db$N_ZPs,
+                       complete_db$pn_SUM_EXP_no_t,
+                       complete_db$pn_SUM_EXP_3t,
+                       complete_db$pn_SUM_EXP_tm
+                       )
+
+names(data.all) <- c("log_total_trx",
+                     "sunday",
+                     "supplied_kms_U1",
+                     "supplied_kms_U2",
+                     "supplied_kms_U3",
+                     "supplied_kms_U4",
+                     "supplied_kms_U6",
+                     "supplied_kms_U7",
+                     "week_52",
+                     "week_53",
+                     "week_7",
+                     "week_8",
+                     "july",
+                     "nov_2017",
+                     "dec_2017",
+                     "working_holiday",
+                     "weekend_holiday",
+                     "census",
+                     "long_weekend",
+                     "social_mov",
+                     "weather",
+                     "subway_kms",
+                     "N_EVs",
+                     "trips_wot",
+                     "trips_w3t",
+                     "trips_wbt")
+
+B2_3 <- lm(as.formula("log_total_trx~."), data = data.all)
+```
+
+```{r}
+coef_B2_3 <- coeftest(B2_3, vcov = NeweyWest(B2_3, lag = g_1, prewhite = FALSE))
+omitted_B2 <- append(omitted_B2,names(which.max(coef_B2_3[,4]))) #BE AWARE OF THIS!
+coef_B2_3
+```
+
+##Estimation and saving results of the Basic Model. B2_4
+```{r}
+data.all <- data.frame(complete_db$log_TOTAL_trx, 
+                       complete_db$SUNDAY,
+                       complete_db$kms_U1,
+                       complete_db$kms_U2,
+                       complete_db$kms_U3,
+                       complete_db$kms_U4,
+                       complete_db$kms_U6,
+                       complete_db$kms_U7,
+                       complete_db$WEEK_OF_YEAR_52,
+                       complete_db$WEEK_OF_YEAR_53,
+                       complete_db$WEEK_OF_YEAR_7,
+                       complete_db$WEEK_OF_YEAR_8,
+                       complete_db$Julio,
+                       complete_db$Nov_2017,
+                       complete_db$Dic_2017,
+                       complete_db$Feriado_laboral,
+                       complete_db$Feriado_no_laboral,
+                       complete_db$Censo,
+                       complete_db$FDS_Largo,
+                       complete_db$Disturbios,
+                       complete_db$Clima,
+                       complete_db$kms_metro,
+                       complete_db$pn_SUM_EXP_no_t,
+                       complete_db$pn_SUM_EXP_3t,
+                       complete_db$pn_SUM_EXP_tm
+                       )
+
+names(data.all) <- c("log_total_trx",
+                     "sunday",
+                     "supplied_kms_U1",
+                     "supplied_kms_U2",
+                     "supplied_kms_U3",
+                     "supplied_kms_U4",
+                     "supplied_kms_U6",
+                     "supplied_kms_U7",
+                     "week_52",
+                     "week_53",
+                     "week_7",
+                     "week_8",
+                     "july",
+                     "nov_2017",
+                     "dec_2017",
+                     "working_holiday",
+                     "weekend_holiday",
+                     "census",
+                     "long_weekend",
+                     "social_mov",
+                     "weather",
+                     "subway_kms",
+                     "trips_wot",
+                     "trips_w3t",
+                     "trips_wbt")
+
+B2_4 <- lm(as.formula("log_total_trx~."), data = data.all)
+```
+
+```{r}
+coef_B2_4 <- coeftest(B2_4, vcov = NeweyWest(B2_4, lag = g_1, prewhite = FALSE))
+omitted_B2 <- append(omitted_B2,names(which.max(coef_B2_4[,4]))) #BE AWARE OF THIS!
+coef_B2_4
+```
+
+##Estimation and saving results of the Basic Model. B2_5
+```{r}
+data.all <- data.frame(complete_db$log_TOTAL_trx, 
+                       complete_db$SUNDAY,
+                       complete_db$kms_U1,
+                       complete_db$kms_U2,
+                       complete_db$kms_U3,
+                       complete_db$kms_U4,
+                       complete_db$kms_U6,
+                       complete_db$kms_U7,
+                       complete_db$WEEK_OF_YEAR_52,
+                       complete_db$WEEK_OF_YEAR_53,
+                       complete_db$WEEK_OF_YEAR_8,
+                       complete_db$Julio,
+                       complete_db$Nov_2017,
+                       complete_db$Dic_2017,
+                       complete_db$Feriado_laboral,
+                       complete_db$Feriado_no_laboral,
+                       complete_db$Censo,
+                       complete_db$FDS_Largo,
+                       complete_db$Disturbios,
+                       complete_db$Clima,
+                       complete_db$kms_metro,
+                       complete_db$pn_SUM_EXP_no_t,
+                       complete_db$pn_SUM_EXP_3t,
+                       complete_db$pn_SUM_EXP_tm
+                       )
+
+names(data.all) <- c("log_total_trx",
+                     "sunday",
+                     "supplied_kms_U1",
+                     "supplied_kms_U2",
+                     "supplied_kms_U3",
+                     "supplied_kms_U4",
+                     "supplied_kms_U6",
+                     "supplied_kms_U7",
+                     "week_52",
+                     "week_53",
+                     "week_8",
+                     "july",
+                     "nov_2017",
+                     "dec_2017",
+                     "working_holiday",
+                     "weekend_holiday",
+                     "census",
+                     "long_weekend",
+                     "social_mov",
+                     "weather",
+                     "subway_kms",
+                     "trips_wot",
+                     "trips_w3t",
+                     "trips_wbt")
+
+B2_5 <- lm(as.formula("log_total_trx~."), data = data.all)
+```
+
+```{r}
+coef_B2_5 <- coeftest(B2_5, vcov = NeweyWest(B2_5, lag = g_1, prewhite = FALSE))
+omitted_B2 <- append(omitted_B2,names(which.max(coef_B2_5[,4]))) #BE AWARE OF THIS!
+coef_B2_5
+```
+
+##Estimation and saving results of the Basic Model. B2_6
+```{r}
+data.all <- data.frame(complete_db$log_TOTAL_trx, 
+                       complete_db$SUNDAY,
+                       complete_db$kms_U1,
+                       complete_db$kms_U2,
+                       complete_db$kms_U3,
+                       complete_db$kms_U4,
+                       complete_db$kms_U6,
+                       complete_db$kms_U7,
+                       complete_db$WEEK_OF_YEAR_52,
+                       complete_db$WEEK_OF_YEAR_53,
+                       complete_db$WEEK_OF_YEAR_8,
+                       complete_db$Julio,
+                       complete_db$Nov_2017,
+                       complete_db$Dic_2017,
+                       complete_db$Feriado_laboral,
+                       complete_db$Censo,
+                       complete_db$FDS_Largo,
+                       complete_db$Disturbios,
+                       complete_db$Clima,
+                       complete_db$kms_metro,
+                       complete_db$pn_SUM_EXP_no_t,
+                       complete_db$pn_SUM_EXP_3t,
+                       complete_db$pn_SUM_EXP_tm
+                       )
+
+names(data.all) <- c("log_total_trx",
+                     "sunday",
+                     "supplied_kms_U1",
+                     "supplied_kms_U2",
+                     "supplied_kms_U3",
+                     "supplied_kms_U4",
+                     "supplied_kms_U6",
+                     "supplied_kms_U7",
+                     "week_52",
+                     "week_53",
+                     "week_8",
+                     "july",
+                     "nov_2017",
+                     "dec_2017",
+                     "working_holiday",
+                     "census",
+                     "long_weekend",
+                     "social_mov",
+                     "weather",
+                     "subway_kms",
+                     "trips_wot",
+                     "trips_w3t",
+                     "trips_wbt")
+
+B2_6 <- lm(as.formula("log_total_trx~."), data = data.all)
+```
+
+```{r}
+coef_B2_6 <- coeftest(B2_6, vcov = NeweyWest(B2_6, lag = g_1, prewhite = FALSE))
+omitted_B2 <- append(omitted_B2,names(which.max(coef_B2_6[,4]))) #BE AWARE OF THIS!
+coef_B2_6
+```
+
+##Estimation and saving results of the Basic Model. B2_7
+```{r}
+data.all <- data.frame(complete_db$log_TOTAL_trx, 
+                       complete_db$SUNDAY,
+                       complete_db$kms_U1,
+                       complete_db$kms_U2,
+                       complete_db$kms_U3,
+                       complete_db$kms_U4,
+                       complete_db$kms_U6,
+                       complete_db$kms_U7,
+                       complete_db$WEEK_OF_YEAR_52,
+                       complete_db$WEEK_OF_YEAR_53,
+                       complete_db$WEEK_OF_YEAR_8,
+                       complete_db$Julio,
+                       complete_db$Nov_2017,
+                       complete_db$Dic_2017,
+                       complete_db$Feriado_laboral,
+                       complete_db$Censo,
+                       complete_db$FDS_Largo,
+                       complete_db$Disturbios,
+                       complete_db$Clima,
+                       complete_db$pn_SUM_EXP_no_t,
+                       complete_db$pn_SUM_EXP_3t,
+                       complete_db$pn_SUM_EXP_tm
+                       )
+
+names(data.all) <- c("log_total_trx",
+                     "sunday",
+                     "supplied_kms_U1",
+                     "supplied_kms_U2",
+                     "supplied_kms_U3",
+                     "supplied_kms_U4",
+                     "supplied_kms_U6",
+                     "supplied_kms_U7",
+                     "week_52",
+                     "week_53",
+                     "week_8",
+                     "july",
+                     "nov_2017",
+                     "dec_2017",
+                     "working_holiday",
+                     "census",
+                     "long_weekend",
+                     "social_mov",
+                     "weather",
+                     "trips_wot",
+                     "trips_w3t",
+                     "trips_wbt")
+
+B2_7 <- lm(as.formula("log_total_trx~."), data = data.all)
+```
+
+```{r}
+coef_B2_7 <- coeftest(B2_7, vcov = NeweyWest(B2_7, lag = g_1, prewhite = FALSE))
+#omitted_B2 <- append(omitted_B2,names(which.max(coef_B2_7[,4]))) #BE AWARE OF THIS!
+coef_B2_7
+```
+
+##Estimation and saving results of the Basic Model. B3_1
+```{r}
+omitted_B3 <- character()
+data.all <- data.frame(complete_db$log_TOTAL_trx, 
+                       complete_db$kms_U1,
+                       complete_db$kms_U2,
+                       complete_db$kms_U3,
+                       complete_db$kms_U4,
+                       complete_db$kms_U5,
+                       complete_db$kms_U6,
+                       complete_db$kms_U7,
+                       complete_db$Clima,
+                       complete_db$pn_SUM_EXP_no_t,
+                       complete_db$pn_SUM_EXP_3t,
+                       complete_db$pn_SUM_EXP_tm
+                       )
+
+names(data.all) <- c("log_total_trx",
+                     "supplied_kms_U1",
+                     "supplied_kms_U2",
+                     "supplied_kms_U3",
+                     "supplied_kms_U4",
+                     "supplied_kms_U5",
+                     "supplied_kms_U6",
+                     "supplied_kms_U7",
+                     "weather",
+                     "trips_wot",
+                     "trips_w3t",
+                     "trips_wbt")
+
+B3_1 <- lm(as.formula("log_total_trx~."), data = data.all)
+```
+
+```{r}
+coef_B3_1 <- coeftest(B3_1, vcov = NeweyWest(B3_1, lag = g_1, prewhite = FALSE))
+coef_B3_1
+```
+
+##Estimation and saving results of the Basic Model. B3_2
+```{r}
+data.all <- data.frame(complete_db$log_TOTAL_trx, 
+                       complete_db$kms_U1,
+                       complete_db$kms_U2,
+                       complete_db$kms_U3,
+                       complete_db$kms_U4,
+                       complete_db$kms_U5,
+                       complete_db$kms_U6,
+                       complete_db$kms_U7,
+                       complete_db$Clima)
+
+names(data.all) <- c("log_total_trx",
+                     "supplied_kms_U1",
+                     "supplied_kms_U2",
+                     "supplied_kms_U3",
+                     "supplied_kms_U4",
+                     "supplied_kms_U5",
+                     "supplied_kms_U6",
+                     "supplied_kms_U7",
+                     "weather")
+
+B3_2 <- lm(as.formula("log_total_trx~."), data = data.all)
+```
+
+```{r}
+coef_B3_2 <- coeftest(B3_2, vcov = NeweyWest(B3_2, lag = g_1, prewhite = FALSE))
+coef_B3_2
+```
+
+##Estimation and saving results of the Basic Model. B3_3
+```{r}
+data.all <- data.frame(complete_db$log_TOTAL_trx, 
+                       complete_db$Clima,
+                       complete_db$pn_SUM_EXP_no_t,
+                       complete_db$pn_SUM_EXP_3t,
+                       complete_db$pn_SUM_EXP_tm
+                       )
+
+names(data.all) <- c("log_total_trx",
+                     "weather",
+                     "trips_wot",
+                     "trips_w3t",
+                     "trips_wbt")
+
+B3_3 <- lm(as.formula("log_total_trx~."), data = data.all)
+```
+
+```{r}
+coef_B3_3 <- coeftest(B3_3, vcov = NeweyWest(B3_3, lag = g_1, prewhite = FALSE))
+coef_B3_3
+```
+
+trips_w3t coefficient < trips_wot coefficient, which intuitively does not make any sense. A possible explanation of this results is that trips made by buses with three-arms turnstiles corresponds to a single transit agency (UN2, SUBUS), which also could have been specially selected to serve particular low-demand routes. There are two options to solve this ISSUE:
+1. Isolate the effect of UN in total transactions => panel_data estimation.
+2. Use trips_wot/trips_w3t/trips_wbt by UN as explanatory variables.
+
+Both solutions will be tested in another R-Notebook
+
+#Plotting number of supplied_kms by UN to check if variables are correct.
+```{r}
+auxiliary_db <- complete_db[,c("DATE","kms_U1","kms_U2","kms_U3","kms_U4","kms_U5","kms_U6","kms_U7")]
+auxiliary_db <- reshape2::melt(auxiliary_db, id="DATE")
+
+kms_UN1_2_3 <- auxiliary_db[which((auxiliary_db$variable=="kms_U1")
+                                  |(auxiliary_db$variable=="kms_U2")
+                                  |(auxiliary_db$variable=="kms_U3")),]
+
+kms_UN4_5_6_7 <- auxiliary_db[which((auxiliary_db$variable=="kms_U4")
+                                    |(auxiliary_db$variable=="kms_U5")
+                                    |(auxiliary_db$variable=="kms_U6")
+                                    |(auxiliary_db$variable=="kms_U7")),]
+```
+
+```{r}
+kms_plot_byUN1_2_3 <- ggplot(kms_UN1_2_3, aes(x=kms_UN1_2_3$DATE, y=kms_UN1_2_3$value, group=kms_UN1_2_3$variable)) + 
+  geom_line(aes(color = kms_UN1_2_3$variable)) + 
+  scale_color_manual(values = c("#0099ff", "#0000cc", "#008000"),name="Operator\nAgency") +
+  xlab("date (days)") + 
+  ylab("supplied_kms") + 
+  scale_x_date(date_breaks="2 months") + 
+  scale_y_continuous(label=scales::comma) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) #+ 
+#  coord_fixed(ratio = 1/5000)
+
+kms_plot_byUN1_2_3
+#ggsave(file.path(plot_path,"kms_plot_byUN1_2_3.pdf"),plot = last_plot(), width = 7, height = 4)
+```
+
+```{r}
+kms_plot_byUN4_5_6_7 <- ggplot(kms_UN4_5_6_7, aes(x=kms_UN4_5_6_7$DATE, y=kms_UN4_5_6_7$value, group=kms_UN4_5_6_7$variable)) + 
+  geom_line(aes(color = kms_UN4_5_6_7$variable)) + 
+  scale_color_manual(values = c("#ff6600", "#00cc99", "#ff0000","#ffcc00"),name="Operator\nAgency") +
+  xlab("date (days)") + 
+  ylab("supplied_kms") + 
+  scale_x_date(date_breaks="2 months") + 
+  scale_y_continuous(label=scales::comma) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) #+ 
+#  coord_fixed(ratio = 1/5000)
+
+kms_plot_byUN4_5_6_7
+#ggsave(file.path(plot_path,"kms_plot_byUN4_5_6_7.pdf"),plot = last_plot(), width = 7, height = 4)
 ```
 
 
-Estimation and saving results of the Basic Model. The methodology to estimate the basic model is:
-- Start including all the possible variables.
-- Eliminate one variable at a time based on HAC SE.
-- OBS: This methodology could be replaced by something "more automatic" (i.e stepwise selection)
-
-
-
-
-Unit root testing.
+#Unit root testing.
 Since we cannot rely on CLM assumptions in this case (particularly on the regressors' Strict Exogeneity), Assymptotic properties of OLS are assumed.
 
 Variables to test:
@@ -224,14 +2182,9 @@ Particularities:
 3. How to choose between nothing, drift and drift + trend? <- plot variables.
 4. Other unit-root existence test? <- complement.
 
-
-
-
-
-
 ```{r}
-getLibrary("urca")
-df_exp_no_t<-ur.df(daily_trx$pn_SUM_EXP_no_t,type="trend",lags=0)
+#getLibrary("urca")
+#df_exp_no_t<-ur.df(daily_trx$pn_SUM_EXP_no_t,type="trend",lags=0)
 ```
 
 

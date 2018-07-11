@@ -1,0 +1,18 @@
+---
+title: "SystemTimeSeries_Estimation"
+output: html_notebook
+---
+
+
+0. Importing all functionality from other .R files
+1. Import datasets
+1.5. Estimation and saving results of the Basic Model
+2. Unit root testing <- TO-DO!
+2.5. Estimation and saving results of the Extended Model <- TO-DO!
+4. Summarizing and printing results to files
+
+
+```{r}
+plot(cars)
+```
+
