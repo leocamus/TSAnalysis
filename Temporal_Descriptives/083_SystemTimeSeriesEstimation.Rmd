@@ -1,18 +1,53 @@
 ---
-title: "SystemTimeSeries_Estimation"
+title: "SystemTimeSeries_Estimation_2"
 output: html_notebook
 ---
 
-
-0. Importing all functionality from other .R files
-1. Import datasets
-1.5. Estimation and saving results of the Basic Model
-2. Unit root testing <- TO-DO!
-2.5. Estimation and saving results of the Extended Model <- TO-DO!
-4. Summarizing and printing results to files
-
+Notebook intended to estimate models solving the issue showed at the end of 082_SystemTimeSeriesEstimation.nb
+1. Estimation of basic model using transactions at daily-UN level > Panel data estimation
+2. Estimation of basic model using trips_wot/trips_w3t/trips_wbt by UN as explanatory variables.
 
 ```{r}
-plot(cars)
+source(file.path(dirname(getwd()),"Utils","TransantiagoConstants.R"))
+```
+
+```{r}
+getLibrary("lubridate")
+getLibrary("dummies")
+
+daily_UN_trx_dir <- file.path(DTPM_TRXDir, "4_DAILY_UN")
+UN_trx_path <- dir(daily_UN_trx_dir, recursive=TRUE, full.names=TRUE, pattern="\\.csv")
+UN_trx_path <- UN_trx_path[3:9]
+```
+
+```{r}
+read_df <- function(x) {
+  df <- read.csv(x, header=TRUE, sep=";", row.names = 1, stringsAsFactors = FALSE)
+  return(df)
+}
+
+UN_trx <- lapply(UN_trx_path, read_df)
+combined.df <- do.call(rbind , UN_trx)
+rm(UN_trx)
+```
+
+```{r}
+combined.df$TOTAL_trx <- combined.df$pn_SUM_TRX_no_t + combined.df$pn_SUM_TRX_3t + combined.df$pn_SUM_TRX_tm + combined.df$zp_SUM_TRX
+```
+
+```{r}
+independent_variables_path <- file.path(DTPM_TRXDir, "0_INDEPENDENTS", "independents_variables.csv")
+independent_variables <- read.csv(independent_variables_path, header=TRUE, sep=";", row.names = 1, stringsAsFactors = FALSE)
+independent_variables$DATE <- as.Date(independent_variables$DATE,"%Y-%m-%d")
+independent_variables$Verano <- independent_variables$Enero + independent_variables$Febrero
+independent_variables$Nov_Dic_2017 <- independent_variables$Nov_2017 + independent_variables$Dic_2017
+independent_variables$WEEK_OF_YEAR <- factor(lubridate::isoweek(independent_variables$DATE))
+independent_variables <- dummy.data.frame(independent_variables, names = c("WEEK_OF_YEAR"), sep="_")
+```
+
+```{r}
+complete_db <- merge(combined.df, independent_variables, by=c("YEAR","MONTH","YEAR_DAY"))
+complete_db <- complete_db[order(complete_db$YEAR,complete_db$MONTH,complete_db$YEAR_DAY,complete_db$UN),]
+complete_db <- dummy.data.frame(complete_db, names = c("UN"), sep="_")
 ```
 

@@ -1,5 +1,5 @@
 ---
-title: "SystemTimeSeries_Estimation"
+title: "SystemTimeSeries_Estimation_1"
 output: html_notebook
 ---
 
@@ -10,7 +10,7 @@ This is a notebook based on the original notebook written in Python called 081_S
 1.5. Estimation and saving results of the Basic Model
 2. Unit root testing <- TO-DO!
 2.5. Estimation and saving results of the Extended Model <- TO-DO!
-4. Summarizing and printing results to files
+4. Summarizing and printing results to files <- TO-DO!
 
 #Importing functionality. 
 Be aware that "getwd()" returns the directory where this notebook is located.
@@ -2168,24 +2168,3 @@ kms_plot_byUN4_5_6_7 <- ggplot(kms_UN4_5_6_7, aes(x=kms_UN4_5_6_7$DATE, y=kms_UN
 kms_plot_byUN4_5_6_7
 #ggsave(file.path(plot_path,"kms_plot_byUN4_5_6_7.pdf"),plot = last_plot(), width = 7, height = 4)
 ```
-
-
-#Unit root testing.
-Since we cannot rely on CLM assumptions in this case (particularly on the regressors' Strict Exogeneity), Assymptotic properties of OLS are assumed.
-
-Variables to test:
-pn_SUM_EXP_no_t, pn_SUM_EXP_3_t, pn_SUM_EXP_tm, TOTAL_trx, kms_ofertados, N_ZPs. 
-
-Particularities:
-1. This series contains high levels of seasonality <- this is a problem!! Start by plotting variables.
-2. How to choose lags? <- remember dynamical completeness
-3. How to choose between nothing, drift and drift + trend? <- plot variables.
-4. Other unit-root existence test? <- complement.
-
-```{r}
-#getLibrary("urca")
-#df_exp_no_t<-ur.df(daily_trx$pn_SUM_EXP_no_t,type="trend",lags=0)
-```
-
-
-
